@@ -1,5 +1,5 @@
-modules = ["nodejs-20", "web"]
-run = "npm install && npm start"
+modules = ["nodejs-20", "web", "postgresql-16"]
+run = "PORT=5000 npm start"
 
 [nix]
 channel = "stable-25_05"
@@ -10,5 +10,29 @@ run = ["npm", "start"]
 deploymentTarget = "autoscale"
 
 [[ports]]
-localPort = 3000
+localPort = 5000
 externalPort = 80
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=5000 npm start"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"

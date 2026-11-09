@@ -24,6 +24,8 @@ app.set('views', path.join(__dirname, 'views'));
 app.disable('x-powered-by');
 
 app.use(helmet({
+  // Allow the workspace preview to embed development pages; keep production locked down.
+  xFrameOptions: PROD ? { action: 'deny' } : false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -32,7 +34,7 @@ app.use(helmet({
       imgSrc: ["'self'", 'data:'],
       scriptSrc: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'none'"],
+      frameAncestors: PROD ? ["'none'"] : ["'self'", 'https://replit.com', 'https://*.replit.com', 'https://*.replit.dev'],
       upgradeInsecureRequests: PROD ? [] : null,
     },
   },

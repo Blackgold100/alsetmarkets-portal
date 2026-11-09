@@ -28,22 +28,33 @@ async function migrate() {
   await pool.query(sql);
 }
 
+// First-run admin login, used only when ADMIN_PASSWORD is not set in Secrets.
+// It must be changed at first sign-in, and it can't be chosen again afterwards.
+const DEFAULT_ADMIN_EMAIL = 'admin@alsetmarkets.com';
+const DEFAULT_ADMIN_PASSWORD = 'AlsetAdmin@2026';
+
 async function ensureAdmin() {
   const { rows } = await pool.query("SELECT COUNT(*)::int AS n FROM users WHERE role='admin'");
   if (rows[0].n > 0) return;
-  const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD || '';
-  if (!email || password.length < 10) {
-    console.warn('No admin account yet. Set ADMIN_EMAIL and ADMIN_PASSWORD (10+ characters) in Secrets, then restart.');
+  const email = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
+  const usingDefault = !process.env.ADMIN_PASSWORD;
+  const password = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
+  if (password.length < 10) {
+    console.warn('ADMIN_PASSWORD must be at least 10 characters. Fix it in Secrets, then restart.');
     return;
   }
   const hash = await bcrypt.hash(password, 12);
+  // The default password must be replaced at first sign-in; a password from Secrets can be kept.
   await pool.query(
     `INSERT INTO users (role, email, password_hash, full_name, status, kyc_status, must_change_password)
-     VALUES ('admin', $1, $2, 'Administrator', 'active', 'verified', FALSE)`,
-    [email, hash]
+     VALUES ('admin', $1, $2, 'Administrator', 'active', 'verified', $3)`,
+    [email, hash, usingDefault]
   );
-  console.log(`Admin account created for ${email}`);
+  if (usingDefault) {
+    console.warn(`Admin account created for ${email} with the DEFAULT password (see ADMIN-LOGIN.md). Sign in now and change it.`);
+  } else {
+    console.log(`Admin account created for ${email}`);
+  }
 }
 
-module.exports = { pool, query, migrate, ensureAdmin };
+module.exports = { pool, query, migrate, ensureAdmin, DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD };

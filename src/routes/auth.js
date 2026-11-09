@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
-const { query } = require('../db');
+const { query, DEFAULT_ADMIN_PASSWORD } = require('../db');
 const h = require('../helpers');
 
 const router = express.Router();
@@ -83,6 +83,7 @@ router.post('/account/password', wrap(async (req, res) => {
   if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return fail('New password must include letters and numbers.');
   if (pw !== String(confirm || '')) return fail('The new passwords do not match.');
   if (await bcrypt.compare(pw, req.user.password_hash)) return fail('Choose a password different from your current one.');
+  if (pw === DEFAULT_ADMIN_PASSWORD) return fail('That is the published default password. Choose your own.');
 
   const hash = await bcrypt.hash(pw, 12);
   await query('UPDATE users SET password_hash=$1, must_change_password=FALSE, updated_at=NOW() WHERE id=$2', [hash, req.user.id]);

@@ -30,8 +30,8 @@ Open **Tools → Secrets** and add:
 | Key | Value |
 |---|---|
 | `SESSION_SECRET` | A long random string (64+ characters). Generate one in the Replit Shell with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-| `ADMIN_EMAIL` | The email you will sign in with as administrator |
-| `ADMIN_PASSWORD` | A strong password (10+ characters). Used only to create the first admin account. |
+| `ADMIN_EMAIL` | *(optional)* The email you will sign in with as administrator. Default `admin@alsetmarkets.com`. |
+| `ADMIN_PASSWORD` | *(optional, recommended)* Your own admin password (10+ characters). If you leave it out, the default first-time login in **ADMIN-LOGIN.md** is used, and you must change it at first sign-in. |
 | `SUPPORT_EMAIL` | *(optional)* e.g. `support@alsetmarkets.com`. Used for the "Add funds", "Withdraw" and "Contact" buttons. |
 | `REGULATORY_NOTICE` | *(optional)* Footer text about the company's registration. Default: `AlsetMarkets is registered in San Salvador, El Salvador, under registration number 12890756.` Set it to override, e.g. to add a licence. |
 | `ACCOUNT_TIERS` | *(optional)* Comma-separated tier names. Default: `Starter,Standard,Professional,VIP` |
@@ -40,7 +40,8 @@ Open **Tools → Secrets** and add:
 
 ### 4. Run it
 1. Click **Run**. In the console you should see `Admin account created for …` and then `AlsetMarkets portal running`.
-2. Open the preview and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+2. Open the preview and sign in with your `ADMIN_EMAIL` / `ADMIN_PASSWORD`, or with the default login in **ADMIN-LOGIN.md**.
+3. *(Optional)* In the **Shell**, run `npm test`. It checks sign-in, the dashboard maths, and crypto deposits and withdrawals (36 checks), then deletes its test data.
 
 ### 5. Deploy (make it public)
 1. Click **Deploy → Autoscale** and keep the default build and run commands (`npm start`). Your secrets carry over.

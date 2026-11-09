@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node test/portal.test.js",
+    "reset-admin": "node scripts/reset-admin.js"
   },
   "license": "UNLICENSED",
   "dependencies": {

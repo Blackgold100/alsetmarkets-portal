@@ -1,0 +1,19 @@
+<form method="post" action="/admin/wallets">
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <% if (userId) { %><input type="hidden" name="user_id" value="<%= userId %>"><% } %>
+  <div class="form-grid">
+    <div class="field"><label for="fw-asset-<%= userId || 'all' %>">Currency</label>
+      <select id="fw-asset-<%= userId || 'all' %>" name="asset" required data-asset-select="#fw-net-<%= userId || 'all' %>">
+        <% ASSETS.forEach(function (a) { %><option value="<%= a %>"><%= a %></option><% }) %>
+      </select></div>
+    <div class="field"><label for="fw-net-<%= userId || 'all' %>">Network</label>
+      <select id="fw-net-<%= userId || 'all' %>" name="network" required>
+        <% Object.keys(NETWORKS).forEach(function (n) { %><option value="<%= n %>" data-assets="<%= Object.keys(ASSET_NETWORKS).filter(function (a) { return ASSET_NETWORKS[a].includes(n); }).join(',') %>"><%= NETWORKS[n].name %></option><% }) %>
+      </select></div>
+    <div class="field"><label for="fw-label-<%= userId || 'all' %>">Internal label</label><input id="fw-label-<%= userId || 'all' %>" name="label" type="text" placeholder="e.g. Treasury wallet 1"><span class="hint">Only admins see this.</span></div>
+    <div class="field" style="grid-column: 1 / -1"><label for="fw-addr-<%= userId || 'all' %>">Address</label><input id="fw-addr-<%= userId || 'all' %>" name="address" type="text" required autocomplete="off" spellcheck="false" class="num"></div>
+    <div class="field" style="grid-column: 1 / -1"><label for="fw-addr2-<%= userId || 'all' %>">Paste the address again to confirm</label><input id="fw-addr2-<%= userId || 'all' %>" name="confirm_address" type="text" required autocomplete="off" spellcheck="false" class="num"><span class="hint">Guards against a typo or a tampered clipboard. Clients will send real funds to this address.</span></div>
+    <div class="field"><label for="fw-memo-<%= userId || 'all' %>">Memo / tag (only if required)</label><input id="fw-memo-<%= userId || 'all' %>" name="memo" type="text"></div>
+  </div>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">Add deposit address</button></div>
+</form>

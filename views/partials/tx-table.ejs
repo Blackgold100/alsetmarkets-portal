@@ -1,0 +1,40 @@
+<table class="data" style="min-width: <%= admin ? 860 : 560 %>px">
+  <thead>
+    <tr>
+      <th>Date</th><th>Type</th><th>Description</th><th>Reference</th><th>Status</th><th class="r">Amount</th>
+      <% if (admin) { %><th class="r">Actions</th><% } %>
+    </tr>
+  </thead>
+  <tbody>
+  <% rows.forEach(function (t) {
+       const neg = t.type === 'withdrawal' || t.type === 'loss' || t.type === 'fee';
+  %>
+    <tr>
+      <td class="num muted" style="white-space: nowrap"><%= fmtDate(t.tx_date) %></td>
+      <td style="font-weight: 500"><%= titleCase(t.type) %></td>
+      <td style="color: var(--ink-2)"><%= t.description || '—' %>
+        <% if (t.tx_hash) { %><div style="font-size: 12px"><% if (txUrl(t.network, t.tx_hash)) { %><a class="num" href="<%= txUrl(t.network, t.tx_hash) %>" target="_blank" rel="noopener noreferrer">Tx <%= shortAddr(t.tx_hash) %> ↗</a><% } else { %><span class="num muted">Tx <%= shortAddr(t.tx_hash) %></span><% } %></div><% } %>
+        <% if (admin && t.wallet_address) { %><div class="num muted addr-small"><%= t.type === 'withdrawal' ? 'To' : 'Via' %> <%= t.asset %>/<%= t.network %>: <%= t.wallet_address %><%= t.wallet_memo ? ' · memo ' + t.wallet_memo : '' %></div><% } %>
+      </td>
+      <td class="num muted"><%= t.reference || '—' %></td>
+      <td><span class="pill pill-<%= t.status %>"><%= titleCase(t.status) %></span></td>
+      <td class="r num" style="font-weight: 600; white-space: nowrap; <%= t.status === 'rejected' ? 'text-decoration: line-through; color: var(--muted)' : '' %>"><%= neg ? '−' : '+' %><%= money(t.amount, cur).replace('−', '') %></td>
+      <% if (admin) { %>
+      <td class="r" style="white-space: nowrap">
+        <% if (t.status === 'pending') { %>
+          <form method="post" action="/admin/transactions/<%= t.id %>/status" class="inline" <%- t.type === 'withdrawal' ? 'data-confirm="Mark this withdrawal as paid? Add the payout tx hash via Edit if you have it."' : '' %>>
+            <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="completed">
+            <button class="btn btn-outline btn-sm" type="submit"><%= t.type === 'withdrawal' ? 'Mark paid' : 'Approve' %></button>
+          </form>
+          <form method="post" action="/admin/transactions/<%= t.id %>/status" class="inline" data-confirm="Reject this transaction?">
+            <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="rejected">
+            <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+          </form>
+        <% } %>
+        <a class="btn btn-outline btn-sm" href="/admin/transactions/<%= t.id %>/edit">Edit</a>
+      </td>
+      <% } %>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>

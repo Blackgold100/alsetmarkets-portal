@@ -1,0 +1,47 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 980px">
+  <div class="page-head"><div><h1>Add a client</h1><p>Creates a login with a one-time temporary password. The client must set their own password on first sign-in.</p></div></div>
+
+  <% if (created) { %>
+  <section class="card stack" style="border-color: #B7E0C8">
+    <div class="alert alert-success" role="status"><span><strong><%= created.user.role === 'admin' ? 'Administrator' : 'Client' %> account created</strong>Share these sign-in details securely (for example by phone or a separate message). The password is shown only once.</span></div>
+    <dl class="facts" style="max-width: 520px">
+      <dt>Name</dt><dd><%= created.user.full_name %></dd>
+      <dt>Sign-in email</dt><dd><%= created.user.email %></dd>
+      <% if (created.user.account_no) { %><dt>Account number</dt><dd class="num"><%= created.user.account_no %></dd><% } %>
+      <dt>Temporary password</dt><dd class="num" style="font-size: 16px; color: var(--navy)"><%= created.password %></dd>
+    </dl>
+    <div class="form-actions" style="margin-top: 0">
+      <% if (created.user.role === 'client') { %><a class="btn btn-primary" href="/admin/clients/<%= created.user.id %>">Open client record → add deposits</a><% } %>
+      <a class="btn btn-outline" href="/admin/clients/new">Add another</a>
+    </div>
+  </section>
+  <% } else { %>
+  <% if (error) { %><div class="alert alert-error" role="alert"><span><%= error %></span></div><% } %>
+  <form method="post" action="/admin/clients" class="card">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="form-grid">
+      <div class="field"><label for="full_name">Full name *</label><input id="full_name" name="full_name" type="text" required value="<%= form.full_name || '' %>"></div>
+      <div class="field"><label for="email">Email (sign-in) *</label><input id="email" name="email" type="email" required value="<%= form.email || '' %>"></div>
+      <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" type="text" value="<%= form.phone || '' %>"></div>
+      <div class="field"><label for="country">Country</label><input id="country" name="country" type="text" value="<%= form.country || '' %>"></div>
+      <div class="field"><label for="tier">Account tier</label>
+        <select id="tier" name="tier"><% TIERS.forEach(function (t) { %><option <%= (form.tier || 'Standard') === t ? 'selected' : '' %>><%= t %></option><% }) %></select></div>
+      <div class="field"><label for="base_currency">Base currency</label>
+        <select id="base_currency" name="base_currency"><% CURRENCIES.forEach(function (c) { %><option <%= (form.base_currency || 'USD') === c ? 'selected' : '' %>><%= c %></option><% }) %></select></div>
+      <div class="field"><label for="plan_name">Plan / product</label><input id="plan_name" name="plan_name" type="text" placeholder="e.g. Managed Forex Portfolio" value="<%= form.plan_name || '' %>"></div>
+      <div class="field"><label for="account_manager">Account manager</label><input id="account_manager" name="account_manager" type="text" value="<%= form.account_manager || '' %>"></div>
+      <div class="field"><label for="account_no">Account number</label><input id="account_no" name="account_no" type="text" value="<%= form.account_no || '' %>"><span class="hint">Leave blank to generate one (e.g. AM482193).</span></div>
+      <div class="field"><label for="opened_on">Account opened</label><input id="opened_on" name="opened_on" type="date" value="<%= form.opened_on || '' %>"><span class="hint">Defaults to today.</span></div>
+      <div class="field"><label for="role">User type</label>
+        <select id="role" name="role"><option value="client" <%= form.role !== 'admin' ? 'selected' : '' %>>Client</option><option value="admin" <%= form.role === 'admin' ? 'selected' : '' %>>Administrator (staff)</option></select>
+        <span class="hint">Administrators can see and edit every client.</span></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Create account</button>
+      <a class="btn btn-outline" href="/admin">Cancel</a>
+    </div>
+  </form>
+  <% } %>
+</main>
+<%- include('../partials/foot') %>

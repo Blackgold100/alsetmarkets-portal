@@ -1,0 +1,39 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 820px">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div>
+    <p style="margin: 0 0 4px"><a href="/admin/clients/<%= t.user_id %>#transactions" style="text-decoration: none">← <%= t.full_name %></a></p>
+    <h1>Edit transaction</h1>
+  </div></div>
+  <form method="post" action="/admin/transactions/<%= t.id %>" class="card">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="form-grid">
+      <div class="field"><label for="type">Type</label>
+        <select id="type" name="type"><% TX_TYPES.forEach(function (x) { %><option value="<%= x %>" <%= t.type === x ? 'selected' : '' %>><%= titleCase(x) %></option><% }) %></select></div>
+      <div class="field"><label for="amount">Amount (<%= t.base_currency %>)</label><input id="amount" name="amount" type="text" inputmode="decimal" required value="<%= t.amount.toFixed(2) %>"></div>
+      <div class="field"><label for="tx_date">Date</label><input id="tx_date" name="tx_date" type="date" required value="<%= t.tx_date %>"></div>
+      <div class="field"><label for="status">Status</label>
+        <select id="status" name="status"><% TX_STATUS.forEach(function (x) { %><option value="<%= x %>" <%= t.status === x ? 'selected' : '' %>><%= titleCase(x) %></option><% }) %></select></div>
+      <div class="field"><label for="reference">Reference</label><input id="reference" name="reference" type="text" value="<%= t.reference || '' %>"></div>
+      <div class="field"><label for="description">Description</label><input id="description" name="description" type="text" value="<%= t.description || '' %>"></div>
+    </div>
+    <h2 style="margin: 20px 0 12px">Crypto details</h2>
+    <div class="form-grid">
+      <div class="field"><label for="asset">Currency</label><select id="asset" name="asset" data-asset-select="#network"><% ASSETS.forEach(function (a) { %><option value="<%= a %>" <%= t.asset === a ? 'selected' : '' %>><%= a %></option><% }) %></select></div>
+      <div class="field"><label for="network">Network</label><select id="network" name="network"><option value="" data-assets="<%= ASSETS.join(',') %>">— Not crypto —</option><% Object.keys(NETWORKS).forEach(function (n) { %><option value="<%= n %>" <%= t.network === n ? 'selected' : '' %> data-assets="<%= Object.keys(ASSET_NETWORKS).filter(function (a) { return ASSET_NETWORKS[a].includes(n); }).join(',') %>"><%= NETWORKS[n].name %></option><% }) %></select></div>
+      <div class="field" style="grid-column: 1 / -1"><label for="wallet_address"><%= t.type === 'withdrawal' ? 'Paid to address' : 'Wallet address' %></label><input id="wallet_address" name="wallet_address" type="text" class="num" value="<%= t.wallet_address || '' %>"></div>
+      <div class="field" style="grid-column: 1 / -1"><label for="tx_hash">Transaction hash</label><input id="tx_hash" name="tx_hash" type="text" class="num" value="<%= t.tx_hash || '' %>">
+        <% if (t.tx_hash && txUrl(t.network, t.tx_hash)) { %><span class="hint"><a href="<%= txUrl(t.network, t.tx_hash) %>" target="_blank" rel="noopener noreferrer">View on block explorer ↗</a></span><% } %></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Save changes</button>
+      <a class="btn btn-outline" href="/admin/clients/<%= t.user_id %>#transactions">Cancel</a>
+    </div>
+  </form>
+  <form method="post" action="/admin/transactions/<%= t.id %>/delete" class="card" data-confirm="Permanently delete this transaction? This changes the client's balance.">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="card-head" style="margin: 0"><div><h2>Delete transaction</h2><p class="muted" style="margin: 4px 0 0; font-size: 13px">Prefer marking it "Rejected" so there is a record. Deletion is logged in the audit log.</p></div>
+    <button class="btn btn-danger" type="submit">Delete</button></div>
+  </form>
+</main>
+<%- include('../partials/foot') %>

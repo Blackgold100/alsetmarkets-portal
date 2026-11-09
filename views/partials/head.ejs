@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title><%= typeof title !== 'undefined' ? title + ' · ' : '' %><%= brand.name %> Client Portal</title>
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<% if (user) { %>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="<%= user.role === 'admin' ? '/admin' : '/' %>">
+      <img src="/static/logo.svg" width="36" height="36" alt="">
+      <span class="brand-word">Alset<span>Markets</span></span>
+      <span class="brand-tag"><%= user.role === 'admin' ? 'Admin Console' : 'Client Portal' %></span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <% if (user.role === 'admin') { %>
+        <a href="/admin" class="<%= (path === '/admin' || path === '/admin/' || path.startsWith('/admin/clients/') || path.startsWith('/admin/transactions')) && path !== '/admin/clients/new' ? 'active' : '' %>">Clients</a>
+        <a href="/admin/clients/new" class="<%= path === '/admin/clients/new' ? 'active' : '' %>">Add client</a>
+        <a href="/admin/wallets" class="<%= path.startsWith('/admin/wallets') ? 'active' : '' %>">Wallets</a>
+        <a href="/admin/notices" class="<%= path.startsWith('/admin/notices') ? 'active' : '' %>">Announcements</a>
+        <a href="/admin/team" class="<%= path.startsWith('/admin/team') ? 'active' : '' %>">Team</a>
+        <a href="/admin/audit" class="<%= path.startsWith('/admin/audit') ? 'active' : '' %>">Audit log</a>
+      <% } else { %>
+        <a href="/" class="<%= path === '/' ? 'active' : '' %>">Overview</a>
+        <a href="/funds/deposit" class="<%= path === '/funds/deposit' ? 'active' : '' %>">Deposit</a>
+        <a href="/funds/withdraw" class="<%= path === '/funds/withdraw' ? 'active' : '' %>">Withdraw</a>
+        <a href="/transactions" class="<%= path.startsWith('/transactions') ? 'active' : '' %>">Transactions</a>
+        <a href="/account" class="<%= path.startsWith('/account') ? 'active' : '' %>">Account &amp; security</a>
+      <% } %>
+    </nav>
+    <div class="who">
+      <div class="avatar" aria-hidden="true"><%= user.full_name.split(/\s+/).map(function (s) { return s[0]; }).slice(0, 2).join('').toUpperCase() %></div>
+      <div>
+        <div class="who-name"><%= user.full_name %></div>
+        <div class="who-sub"><%= user.role === 'admin' ? 'Administrator' : (user.account_no || '') %></div>
+      </div>
+      <form method="post" action="/logout" class="inline">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <button type="submit" class="btn-ghost-dark">Sign out</button>
+      </form>
+    </div>
+  </div>
+</header>
+<% } %>

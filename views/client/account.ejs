@@ -1,0 +1,26 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 900px">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div><h1>Account &amp; security</h1><p>Your details on file with <%= brand.name %>.</p></div></div>
+  <section class="card">
+    <h2 style="margin-bottom: 14px">Personal details</h2>
+    <dl class="facts">
+      <dt>Full name</dt><dd><%= client.full_name %></dd>
+      <dt>Email</dt><dd><%= client.email %></dd>
+      <dt>Phone</dt><dd><%= client.phone || '—' %></dd>
+      <dt>Country</dt><dd><%= client.country || '—' %></dd>
+      <dt>Account number</dt><dd class="num"><%= client.account_no %></dd>
+      <dt>Tier</dt><dd><%= client.tier %></dd>
+      <dt>Status</dt><dd><%= titleCase(client.status) %></dd>
+      <dt>Identity (KYC)</dt><dd><%= titleCase(client.kyc_status) %></dd>
+    </dl>
+    <p class="muted" style="font-size: 13px; margin: 16px 0 0">To change any of these details, email <a href="mailto:<%= brand.supportEmail %>"><%= brand.supportEmail %></a> from your registered address.</p>
+  </section>
+  <section class="card">
+    <div class="card-head" style="margin: 0">
+      <div><h2>Password</h2><p class="muted" style="margin: 4px 0 0; font-size: 13px">Last sign-in <%= client.last_login_at ? fmtDateTime(client.last_login_at) : '—' %></p></div>
+      <a class="btn btn-outline" href="/account/password">Change password</a>
+    </div>
+  </section>
+</main>
+<%- include('../partials/foot') %>

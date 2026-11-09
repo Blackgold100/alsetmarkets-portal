@@ -1,0 +1,40 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 1000px">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div><h1>Announcements</h1><p>Messages shown on client dashboards. Post to everyone here, or to one client from their record.</p></div></div>
+  <form method="post" action="/admin/notices" class="card">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <h2 style="margin-bottom: 14px">New announcement to all clients</h2>
+    <div class="form-grid">
+      <div class="field"><label for="title">Title</label><input id="title" name="title" type="text" required placeholder="Holiday trading hours"></div>
+      <div class="field"><label for="level">Style</label><select id="level" name="level"><option value="info">Information</option><option value="warning">Action needed</option><option value="success">Good news</option></select></div>
+    </div>
+    <div class="field" style="margin-top: 14px"><label for="body">Message</label><textarea id="body" name="body" required></textarea></div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Post to all clients</button></div>
+  </form>
+  <section class="card">
+    <h2 style="margin-bottom: 8px">All notices</h2>
+    <% if (notices.length) { %>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 680px">
+        <thead><tr><th>Posted</th><th>Audience</th><th>Title</th><th>Status</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% notices.forEach(function (n) { %>
+          <tr>
+            <td class="muted" style="white-space: nowrap"><%= fmtDate(n.created_at.toISOString()) %></td>
+            <td><% if (n.user_id) { %><a href="/admin/clients/<%= n.user_id %>"><%= n.full_name %></a><% } else { %>All clients<% } %></td>
+            <td><strong><%= n.title %></strong><div class="muted" style="font-size: 12px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><%= n.body %></div></td>
+            <td><span class="pill pill-<%= n.active ? n.level : 'neutral' %>"><%= n.active ? 'Showing' : 'Hidden' %></span></td>
+            <td class="r" style="white-space: nowrap">
+              <form method="post" action="/admin/notices/<%= n.id %>/toggle" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline btn-sm" type="submit"><%= n.active ? 'Hide' : 'Show' %></button></form>
+              <form method="post" action="/admin/notices/<%= n.id %>/delete" class="inline" data-confirm="Delete this notice?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Delete</button></form>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %><div class="empty">No announcements yet.</div><% } %>
+  </section>
+</main>
+<%- include('../partials/foot') %>

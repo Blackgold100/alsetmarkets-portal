@@ -1,0 +1,71 @@
+<%- include('../partials/head') %>
+<% const cur = user.base_currency; %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head">
+    <div><h1>Add funds</h1><p>Deposit by cryptocurrency to your <%= brand.name %> account <span class="num"><%= user.account_no %></span>.</p></div>
+    <a class="btn btn-outline" href="/">Back to overview</a>
+  </div>
+
+  <ol class="steps" aria-label="How to deposit">
+    <li><span class="step-n">1</span><span><strong>Pick a currency and network</strong>Use the exact network shown.</span></li>
+    <li><span class="step-n">2</span><span><strong>Send from your wallet or exchange</strong>Copy the address or scan the QR code.</span></li>
+    <li><span class="step-n">3</span><span><strong>Submit the transaction hash</strong>We credit your account once it's confirmed.</span></li>
+  </ol>
+
+  <% if (!wallets.length) { %>
+    <div class="alert alert-info"><span><strong>Crypto deposits are not available yet</strong>Please contact <a href="mailto:<%= brand.supportEmail %>"><%= brand.supportEmail %></a> for deposit instructions.</span></div>
+  <% } else { %>
+  <section aria-label="Deposit addresses" class="wallet-grid">
+    <% wallets.forEach(function (w) { %>
+    <article class="card wallet-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap">
+        <div><div style="font-size: 18px; font-weight: 700"><%= w.asset %></div><div class="muted" style="font-size: 13px"><%= networkName(w.network) %></div></div>
+        <% if (w.user_id) { %><span class="pill pill-gold">Your personal address</span><% } %>
+      </div>
+      <img class="qr" src="<%= w.qr %>" width="168" height="168" alt="QR code for the <%= w.asset %> <%= networkName(w.network) %> deposit address">
+      <div class="field">
+        <span class="label-txt">Deposit address</span>
+        <div class="copy-row">
+          <code class="addr num" id="addr-<%= w.id %>"><%= w.address %></code>
+          <button type="button" class="btn btn-outline btn-sm" data-copy="#addr-<%= w.id %>" aria-label="Copy <%= w.asset %> address">Copy</button>
+        </div>
+      </div>
+      <% if (w.memo) { %>
+      <div class="field">
+        <span class="label-txt">Memo / tag (required)</span>
+        <div class="copy-row"><code class="addr num" id="memo-<%= w.id %>"><%= w.memo %></code><button type="button" class="btn btn-outline btn-sm" data-copy="#memo-<%= w.id %>" aria-label="Copy memo">Copy</button></div>
+      </div>
+      <% } %>
+      <div class="alert alert-warning" style="font-size: 13px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <span>Send only <strong style="display: inline"><%= w.asset %></strong> on <strong style="display: inline"><%= networkName(w.network) %></strong>. Other coins or networks sent to this address cannot be recovered.</span>
+      </div>
+    </article>
+    <% }) %>
+  </section>
+
+  <div class="row" style="align-items: flex-start">
+    <section class="card side" aria-label="Confirm your deposit">
+      <h2 style="margin-bottom: 4px">I've sent a deposit</h2>
+      <p class="muted" style="margin: 0 0 14px; font-size: 13px">Submit the details so we can match your payment.</p>
+      <form method="post" action="/funds/deposit" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="field"><label for="wallet_id">Sent to</label>
+          <select id="wallet_id" name="wallet_id" required>
+            <% wallets.forEach(function (w) { %><option value="<%= w.id %>"><%= w.asset %> · <%= networkName(w.network) %></option><% }) %>
+          </select></div>
+        <div class="field"><label for="amount">Amount sent (<%= cur %> value)</label><input id="amount" name="amount" type="text" inputmode="decimal" required placeholder="e.g. 1,000.00"><span class="hint">Minimum <%= money(minDeposit, cur) %>. Stablecoins (USDT/USDC) are credited 1:1.</span></div>
+        <div class="field"><label for="tx_hash">Transaction hash (TxID)</label><input id="tx_hash" name="tx_hash" type="text" required autocomplete="off" spellcheck="false" class="num"><span class="hint">Find it in your wallet or exchange's withdrawal history.</span></div>
+        <button class="btn btn-primary" type="submit">Submit deposit</button>
+      </form>
+    </section>
+    <section class="card grow" aria-label="Your deposits">
+      <h2 style="margin-bottom: 10px">Your recent deposits</h2>
+      <%- include('../partials/crypto-history', { rows: recent, kind: 'deposit', cur: cur }) %>
+    </section>
+  </div>
+  <% } %>
+  <%- include('../partials/legal') %>
+</main>
+<%- include('../partials/foot') %>

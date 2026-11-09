@@ -1,0 +1,118 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head">
+    <div><h1>Clients</h1><p>All client accounts, balances and pending requests.</p></div>
+    <a class="btn btn-gold" href="/admin/clients/new">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Add client
+    </a>
+  </div>
+
+  <section class="kpis" aria-label="Firm totals">
+    <div class="card kpi accent"><div class="label">Clients</div><div class="value num"><%= stats.clients %></div><div class="sub"><%= stats.active %> active</div></div>
+    <div class="card kpi"><div class="label">Total capital invested</div><div class="value num"><%= money(stats.invested) %></div><div class="sub">Net deposits across all clients</div></div>
+    <div class="card kpi"><div class="label">Total client balances</div><div class="value num"><%= money(stats.balance) %></div><div class="sub">Including returns, net of fees</div></div>
+    <div class="card kpi"><div class="label">Pending requests</div><div class="value num"><%= stats.pending_count %></div><div class="sub">Transactions awaiting approval</div></div>
+  </section>
+
+  <% if (pending.length) { %>
+  <section class="card">
+    <div class="card-head"><h2>Awaiting approval</h2></div>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 720px">
+        <thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Crypto details</th><th class="r">Amount</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% pending.forEach(function (t) { %>
+          <tr>
+            <td class="num muted"><%= fmtDate(t.tx_date) %></td>
+            <td><a href="/admin/clients/<%= t.user_id %>#transactions"><%= t.full_name %></a> <span class="num muted"><%= t.account_no %></span></td>
+            <td style="font-weight: 500"><%= titleCase(t.type) %></td>
+            <td class="num addr-small" style="max-width: 300px">
+              <% if (t.asset) { %><div style="font-family: inherit"><%= t.asset %> · <%= networkName(t.network) %></div><% } %>
+              <% if (t.wallet_address) { %><div class="muted"><%= t.type === 'withdrawal' ? 'Pay to: ' : 'Sent to: ' %><%= t.wallet_address %><%= t.wallet_memo ? ' · memo ' + t.wallet_memo : '' %></div><% } %>
+              <% if (t.tx_hash) { %><div><a href="<%= txUrl(t.network, t.tx_hash) || '#' %>" target="_blank" rel="noopener noreferrer">Tx <%= shortAddr(t.tx_hash) %> ↗</a></div><% } %>
+              <% if (!t.asset && !t.tx_hash) { %><span class="muted"><%= t.reference || '—' %></span><% } %>
+            </td>
+            <td class="r num" style="font-weight: 600"><%= money(t.amount, t.base_currency) %></td>
+            <td class="r" style="white-space: nowrap">
+              <form method="post" action="/admin/transactions/<%= t.id %>/status" class="inline" style="display: inline-flex; gap: 6px; align-items: center">
+                <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="completed"><input type="hidden" name="back" value="dashboard">
+                <% if (t.type === 'withdrawal' && t.network) { %><label class="sr-only" for="ph-<%= t.id %>">Payout transaction hash</label><input id="ph-<%= t.id %>" name="tx_hash" type="text" placeholder="Payout tx hash" class="num" style="width: 170px; min-height: 34px; padding: 6px 8px; font-size: 12px"><% } %>
+                <button class="btn btn-outline btn-sm" type="submit"><%= t.type === 'withdrawal' ? 'Mark paid' : 'Approve' %></button>
+              </form>
+              <form method="post" action="/admin/transactions/<%= t.id %>/status" class="inline" data-confirm="Reject this transaction?">
+                <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="rejected"><input type="hidden" name="back" value="dashboard">
+                <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <% } %>
+
+  <% if (pendingWallets.length) { %>
+  <section class="card">
+    <div class="card-head"><h2>Withdrawal addresses to verify</h2><a href="/admin/wallets#withdrawal" style="text-decoration: none; font-weight: 500">All wallets →</a></div>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 760px">
+        <thead><tr><th>Client</th><th>Currency</th><th>Address</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% pendingWallets.forEach(function (w) { %>
+          <tr>
+            <td><a href="/admin/clients/<%= w.user_id %>#wallets"><%= w.full_name %></a> <span class="num muted"><%= w.account_no %></span></td>
+            <td><%= w.asset %> · <%= networkName(w.network) %></td>
+            <td class="num addr-small" style="max-width: 340px"><%= w.address %><%= w.memo ? ' · memo ' + w.memo : '' %></td>
+            <td class="r" style="white-space: nowrap">
+              <form method="post" action="/admin/client-wallets/<%= w.id %>/status" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="approved"><input type="hidden" name="back" value="dashboard"><button class="btn btn-outline btn-sm" type="submit">Approve</button></form>
+              <form method="post" action="/admin/client-wallets/<%= w.id %>/status" class="inline" data-confirm="Reject this address?"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="rejected"><input type="hidden" name="back" value="dashboard"><button class="btn btn-danger btn-sm" type="submit">Reject</button></form>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <% } %>
+
+  <section class="card">
+    <form method="get" action="/admin" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px" role="search">
+      <label class="sr-only" for="q">Search clients</label>
+      <input id="q" type="search" name="q" value="<%= q %>" placeholder="Search name, email or account number" style="flex: 1 1 280px; width: auto">
+      <label class="sr-only" for="status">Status</label>
+      <select id="status" name="status" style="flex: 0 1 180px; width: auto">
+        <option value="">All statuses</option>
+        <% STATUSES.forEach(function (st) { %><option value="<%= st %>" <%= status === st ? 'selected' : '' %>><%= titleCase(st) %></option><% }) %>
+      </select>
+      <button class="btn btn-outline" type="submit">Filter</button>
+    </form>
+    <% if (clients.length) { %>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 900px">
+        <thead><tr><th>Client</th><th>Account</th><th>Status</th><th>Tier</th><th>KYC</th><th class="r">Invested</th><th class="r">Balance</th><th class="r">Return</th><th></th></tr></thead>
+        <tbody>
+        <% clients.forEach(function (c) { const roi = c.balance - c.invested; %>
+          <tr>
+            <td><a href="/admin/clients/<%= c.id %>" style="font-weight: 600; text-decoration: none"><%= c.full_name %></a><div class="muted" style="font-size: 12px"><%= c.email %></div></td>
+            <td class="num"><%= c.account_no %></td>
+            <td><span class="pill pill-<%= c.status %>"><%= titleCase(c.status) %></span></td>
+            <td><%= c.tier %><% if (c.upgrade_active) { %> <span class="pill pill-gold" title="Upgrade notice showing">↑</span><% } %></td>
+            <td><span class="pill pill-<%= c.kyc_status %>"><%= titleCase(c.kyc_status) %></span></td>
+            <td class="r num"><%= money(c.invested, c.base_currency) %></td>
+            <td class="r num" style="font-weight: 600"><%= money(c.balance, c.base_currency) %></td>
+            <td class="r num <%= roi < 0 ? 'down' : roi > 0 ? 'up' : '' %>"><%= signedMoney(roi, c.base_currency) %></td>
+            <td class="r"><a class="btn btn-outline btn-sm" href="/admin/clients/<%= c.id %>">Manage</a></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %>
+      <div class="empty">No clients found. <a href="/admin/clients/new">Add your first client</a>.</div>
+    <% } %>
+  </section>
+</main>
+<%- include('../partials/foot') %>

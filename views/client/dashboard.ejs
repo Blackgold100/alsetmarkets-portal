@@ -1,0 +1,275 @@
+<%- include('../partials/head') %>
+<%
+  const cur = client.base_currency;
+  const s = summary;
+  const base = preview ? `/admin/clients/${client.id}/preview` : '/';
+  const statusIcon = { active: 'M20 6 9 17l-5-5', pending: 'M12 7v5l3 2', suspended: 'M8 8l8 8M16 8l-8 8', closed: 'M8 8l8 8M16 8l-8 8' }[client.status];
+%>
+<% if (preview) { %>
+<div class="preview-bar">
+  <span>Preview — this is exactly what <%= client.full_name %> sees.</span>
+  <a href="/admin/clients/<%= client.id %>">Back to client record</a>
+</div>
+<% } %>
+<main class="page" id="overview">
+  <%- include('../partials/flash') %>
+
+  <div class="page-head">
+    <div>
+      <h1>Welcome back, <%= client.full_name.split(' ')[0] %></h1>
+      <p>Account <span class="num"><%= client.account_no %></span><%= client.plan_name ? ' · ' + client.plan_name : '' %></p>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+      <span class="chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Figures as of <%= fmtDate(new Date().toISOString()) %> · <%= cur %>
+      </span>
+      <a class="btn btn-outline" href="<%= preview ? '#' : '/funds/withdraw' %>">Withdraw</a>
+      <a class="btn btn-gold" href="<%= preview ? '#' : '/funds/deposit' %>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add funds
+      </a>
+    </div>
+  </div>
+
+  <% if (client.status !== 'active') { %>
+  <div class="alert alert-<%= client.status === 'pending' ? 'warning' : 'error' %>" role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+    <span><strong>Account <%= client.status %></strong>
+      <%= client.status === 'pending' ? 'Your account is being reviewed. You can view your dashboard, but some actions are unavailable until it is activated.' : 'Your account is currently ' + client.status + '. Please contact ' + brand.supportEmail + ' for assistance.' %></span>
+  </div>
+  <% } %>
+
+  <% notices.forEach(function (n) { %>
+  <div class="alert alert-<%= n.level %>" role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    <span><strong><%= n.title %></strong><span style="white-space: pre-line"><%= n.body %></span></span>
+  </div>
+  <% }) %>
+
+  <% if (client.upgrade_active) { %>
+  <section class="upgrade" aria-label="Account upgrade notice">
+    <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+    <div class="body">
+      <div class="title"><%= client.upgrade_title || 'Your account is eligible for an upgrade' %></div>
+      <% if (client.upgrade_target_tier) { %><div style="font-size: 13px; margin-top: 2px">Current tier: <strong><%= client.tier %></strong> → <strong class="tier"><%= client.upgrade_target_tier %></strong></div><% } %>
+      <% if (client.upgrade_message) { %><p><%= client.upgrade_message %></p><% } %>
+    </div>
+    <% if (client.upgrade_cta_url) { %>
+      <a class="btn btn-gold" href="<%= client.upgrade_cta_url %>" rel="noopener"><%= client.upgrade_cta_label || 'Learn more' %></a>
+    <% } else { %>
+      <a class="btn btn-gold" href="mailto:<%= brand.supportEmail %>?subject=Account%20upgrade%20-%20<%= client.account_no %>"><%= client.upgrade_cta_label || 'Contact us to upgrade' %></a>
+    <% } %>
+  </section>
+  <% } %>
+
+  <!-- KPIs -->
+  <section class="kpis" aria-label="Key figures">
+    <div class="card kpi accent">
+      <div class="label">Total invested</div>
+      <div class="value num"><%= money(s.invested, cur) %></div>
+      <div class="sub">Deposits <span class="num"><%= money(s.deposits, cur) %></span> · Withdrawals <span class="num"><%= money(s.withdrawals, cur) %></span></div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Account balance</div>
+      <div class="value num"><%= money(s.balance, cur) %></div>
+      <div class="sub">Capital plus returns, net of fees</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Total return (ROI)</div>
+      <div class="value num <%= s.roi < 0 ? 'down' : 'up' %>"><%= signedMoney(s.roi, cur) %></div>
+      <div class="sub">
+        <span class="pill <%= s.roi < 0 ? 'pill-down' : 'pill-up' %> num"><%= s.roi < 0 ? '▼' : '▲' %> <%= pct(s.roiPct) %></span>
+        <span>on capital invested</span>
+      </div>
+    </div>
+    <div class="card kpi">
+      <div class="label">Available to withdraw</div>
+      <div class="value num"><%= money(s.available, cur) %></div>
+      <div class="sub">
+        <% if (s.pendingWithdrawals > 0) { %>Pending withdrawals <span class="num"><%= money(s.pendingWithdrawals, cur) %></span>
+        <% } else if (s.pendingDeposits > 0) { %>Deposits being processed <span class="num"><%= money(s.pendingDeposits, cur) %></span>
+        <% } else { %>No pending requests<% } %>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chart + status -->
+  <div class="row">
+    <section class="card grow" aria-label="Performance">
+      <div class="card-head" style="align-items: flex-start">
+        <div>
+          <h2>Account balance vs. capital invested</h2>
+          <% if (chart) { %>
+          <div style="margin-top: 6px; font-size: 13px">
+            <span class="muted">Return for period, excl. deposits:</span>
+            <span class="num <%= chart.gain < 0 ? 'down' : 'up' %>" style="font-weight: 600"><%= chart.gain < 0 ? '▼' : '▲' %> <%= money(Math.abs(chart.gain), cur) %> (<%= pct(chart.gainPct) %>)</span>
+          </div>
+          <% } %>
+        </div>
+        <nav class="seg" aria-label="Time range">
+          <% ranges.forEach(function (r) { %>
+            <a href="<%= base %>?range=<%= r %>#overview" aria-current="<%= r === range ? 'true' : 'false' %>"><%= r %></a>
+          <% }) %>
+        </nav>
+      </div>
+      <% if (chart) { %>
+      <div class="legend">
+        <span><span class="lg-line"></span>Account balance</span>
+        <span><span class="lg-dash"></span>Capital invested</span>
+      </div>
+      <div class="chart">
+        <div class="chart-y" aria-hidden="true">
+          <% chart.yTicks.forEach(function (t) { %><div class="num" style="top: <%= t.top.toFixed(1) %>px"><%= t.label %></div><% }) %>
+        </div>
+        <div class="chart-main">
+          <div class="chart-plot" data-points="<%= JSON.stringify(chart.points) %>" data-currency="<%= cur %>">
+            <svg viewBox="0 0 1000 280" preserveAspectRatio="none" role="img" aria-label="Account balance from <%= money(chart.points[0].bal, cur) %> to <%= money(chart.points[chart.points.length - 1].bal, cur) %> over the selected period; capital invested from <%= money(chart.points[0].inv, cur) %> to <%= money(chart.points[chart.points.length - 1].inv, cur) %>.">
+              <path d="<%= chart.grid %>" fill="none" stroke="#EAECF0" stroke-width="1" vector-effect="non-scaling-stroke"/>
+              <path d="<%= chart.area %>" fill="#2F6BFF" fill-opacity="0.07"/>
+              <path d="<%= chart.inv %>" fill="none" stroke="#667085" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+              <path d="<%= chart.line %>" fill="none" stroke="#2F6BFF" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <div class="xh-line"></div><div class="xh-dot"></div><div class="tip" role="presentation"></div>
+          </div>
+          <div class="chart-x" aria-hidden="true">
+            <% chart.xTicks.forEach(function (t) { %><div class="<%= t.align %>" style="left: <%= t.left %>%"><%= fmtDate(t.iso) %></div><% }) %>
+          </div>
+        </div>
+      </div>
+      <% } else { %>
+        <div class="empty">Your performance chart will appear after your first deposit is recorded.</div>
+      <% } %>
+    </section>
+
+    <section class="card side stack" aria-label="Account status">
+      <div class="card-head" style="margin: 0">
+        <h2>Account status</h2>
+        <span class="pill pill-<%= client.status %>">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="<%= statusIcon %>"/></svg>
+          <%= titleCase(client.status) %>
+        </span>
+      </div>
+      <dl class="facts">
+        <dt>Account number</dt><dd class="num"><%= client.account_no %></dd>
+        <dt>Account tier</dt><dd><span class="pill pill-gold"><%= client.tier %></span><% if (client.upgrade_active) { %> <span style="color: var(--blue-ink)">· Upgrade available</span><% } %></dd>
+        <dt>Identity (KYC)</dt>
+        <dd class="<%= client.kyc_status === 'verified' ? 'up' : client.kyc_status === 'rejected' ? 'down' : '' %>">
+          <%= titleCase(client.kyc_status) %><%= client.kyc_status === 'verified' && client.kyc_verified_on ? ' · ' + fmtDate(client.kyc_verified_on) : '' %>
+        </dd>
+        <% if (client.plan_name) { %><dt>Plan</dt><dd><%= client.plan_name %></dd><% } %>
+        <% if (client.risk_profile) { %><dt>Risk profile</dt><dd><%= client.risk_profile %></dd><% } %>
+        <dt>Base currency</dt><dd><%= cur %></dd>
+        <dt>Member since</dt><dd><%= fmtDate(client.opened_on) %></dd>
+        <dt>Last sign-in</dt><dd><%= client.last_login_at ? fmtDateTime(client.last_login_at) : '—' %></dd>
+      </dl>
+      <% if (client.kyc_status !== 'verified') { %>
+      <div class="alert alert-warning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <span><strong>Identity verification <%= client.kyc_status === 'rejected' ? 'needs attention' : 'pending' %></strong>Send your ID and proof of address to <a href="mailto:<%= brand.supportEmail %>"><%= brand.supportEmail %></a>.</span>
+      </div>
+      <% } %>
+      <% if (client.account_manager) { %>
+      <div style="border-top: 1px solid var(--line-2); padding-top: 14px; display: flex; align-items: center; gap: 12px">
+        <div class="avatar" style="background: #E8EDF8; color: var(--blue-ink)" aria-hidden="true"><%= client.account_manager.split(/\s+/).map(function (x) { return x[0]; }).slice(0, 2).join('').toUpperCase() %></div>
+        <div style="flex: 1 1 auto; min-width: 0">
+          <div class="muted" style="font-size: 12px">Your account manager</div>
+          <div style="font-weight: 600"><%= client.account_manager %></div>
+        </div>
+        <a class="btn btn-outline btn-sm" href="mailto:<%= brand.supportEmail %>?subject=Message%20for%20<%= encodeURIComponent(client.account_manager) %>">Contact</a>
+      </div>
+      <% } %>
+    </section>
+  </div>
+
+  <!-- Performance summary + allocation -->
+  <div class="row">
+    <% if (alloc.groups.length) { %>
+    <section class="card grow" aria-label="Portfolio allocation">
+      <div class="card-head"><h2>Portfolio allocation</h2><span class="muted" style="font-size: 13px">Total <span class="num"><%= money(alloc.total, cur) %></span></span></div>
+      <div class="alloc-bar" role="img" aria-label="Allocation: <%= alloc.groups.map(function (g) { return g.name + ' ' + g.pct.toFixed(1) + '%'; }).join(', ') %>">
+        <% alloc.groups.forEach(function (g) { %><div style="width: <%= g.pct.toFixed(2) %>%; background: <%= g.color %>"></div><% }) %>
+      </div>
+      <div class="table-wrap">
+        <table class="data" style="min-width: 620px">
+          <thead><tr><th>Holding</th><th>Asset class</th><th class="r">Invested</th><th class="r">Current value</th><th class="r">Weight</th><th class="r">P/L</th></tr></thead>
+          <tbody>
+          <% alloc.rows.forEach(function (r) { %>
+            <tr>
+              <td style="font-weight: 500"><%= r.name %><% if (r.notes) { %><div class="muted" style="font-size: 12px; font-weight: 400"><%= r.notes %></div><% } %></td>
+              <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="swatch" style="background: <%= r.color %>"></span><%= r.asset_class %></span></td>
+              <td class="r num muted"><%= money(r.amount_in, cur) %></td>
+              <td class="r num" style="font-weight: 600"><%= money(r.current_value, cur) %></td>
+              <td class="r num"><%= r.weight.toFixed(1) %>%</td>
+              <td class="r num <%= r.pl < 0 ? 'down' : 'up' %>"><%= r.pl < 0 ? '▼' : '▲' %> <%= money(Math.abs(r.pl), cur) %><div style="font-size: 12px"><%= pct(r.plPct) %></div></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <% } %>
+
+    <section class="card <%= alloc.groups.length ? 'side' : 'grow' %> stack" aria-label="Performance summary">
+      <h2>Performance summary</h2>
+      <div class="metric-grid">
+        <div class="metric"><div class="m-label">Total profits</div><div class="m-value num up"><%= money(s.profit, cur) %></div></div>
+        <div class="metric"><div class="m-label">Total losses</div><div class="m-value num <%= s.loss > 0 ? 'down' : '' %>"><%= s.loss > 0 ? '−' : '' %><%= money(s.loss, cur) %></div></div>
+        <div class="metric"><div class="m-label">Fees paid</div><div class="m-value num"><%= money(s.fees, cur) %></div></div>
+        <div class="metric"><div class="m-label">This month</div><div class="m-value num <%= s.thisMonthPl < 0 ? 'down' : s.thisMonthPl > 0 ? 'up' : '' %>"><%= signedMoney(s.thisMonthPl, cur) %></div></div>
+        <div class="metric"><div class="m-label">Profitable months</div><div class="m-value num"><%= s.monthsUp %> of <%= s.monthsUp + s.monthsDown %></div></div>
+        <div class="metric"><div class="m-label">Best month</div><div class="m-value num"><%= s.best ? fmtDate(s.best.key + '-01').slice(3) : '—' %></div></div>
+      </div>
+    </section>
+  </div>
+
+  <% if (s.monthly.length) { %>
+  <section class="card" aria-label="Monthly performance">
+    <div class="card-head"><h2>Monthly performance</h2><span class="muted" style="font-size: 13px">Last 12 months · net of fees</span></div>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 520px">
+        <thead><tr><th>Month</th><th class="r">Opening balance</th><th class="r">Deposits</th><th class="r">Net P/L</th><th class="r">Return</th></tr></thead>
+        <tbody>
+        <% s.monthly.forEach(function (m) { %>
+          <tr>
+            <td><%= fmtDate(m.key + '-01').slice(3) %></td>
+            <td class="r num"><%= money(m.startBalance, cur) %></td>
+            <td class="r num muted"><%= m.deposits ? money(m.deposits, cur) : '—' %></td>
+            <td class="r num <%= m.pl < 0 ? 'down' : m.pl > 0 ? 'up' : '' %>" style="font-weight: 600"><%= m.pl ? signedMoney(m.pl, cur) : '—' %></td>
+            <td class="r num <%= m.pl < 0 ? 'down' : m.pl > 0 ? 'up' : '' %>"><%= m.pl && m.ret !== null ? pct(m.ret) : '—' %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- Transactions + documents -->
+  <div class="row" style="align-items: flex-start">
+    <section class="card grow" aria-label="Recent transactions">
+      <div class="card-head">
+        <h2>Recent transactions</h2>
+        <% if (!preview) { %><a href="/transactions" style="font-weight: 500; text-decoration: none">Full history →</a><% } %>
+      </div>
+      <% if (transactions.length) { %>
+      <div class="table-wrap">
+        <%- include('../partials/tx-table', { rows: transactions.slice(0, 8), cur: cur, admin: false }) %>
+      </div>
+      <% } else { %><div class="empty">No transactions yet.</div><% } %>
+    </section>
+    <section class="card side" aria-label="Statements and documents">
+      <h2 style="margin-bottom: 8px">Statements &amp; documents</h2>
+      <% if (documents.length) { documents.forEach(function (d) { %>
+        <a class="list-link" href="<%= d.url %>" target="_blank" rel="noopener noreferrer">
+          <span class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475467" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></span>
+          <span style="flex: 1 1 auto; min-width: 0"><span style="display: block; font-weight: 500"><%= d.title %></span><span class="muted" style="display: block; font-size: 12px">Issued <%= fmtDate(d.issued_on) %></span></span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475467" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+        </a>
+      <% }) } else { %><div class="empty">Statements will appear here once issued.</div><% } %>
+    </section>
+  </div>
+
+  <%- include('../partials/legal') %>
+</main>
+<%- include('../partials/foot') %>

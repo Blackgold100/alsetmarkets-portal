@@ -1,0 +1,37 @@
+<%- include('partials/head', { title: 'Sign in' }) %>
+<div class="auth">
+  <aside class="auth-side">
+    <a class="brand" href="<%= brand.website %>">
+      <img src="/static/logo.svg" width="40" height="40" alt="">
+      <span class="brand-word">Alset<span>Markets</span></span>
+    </a>
+    <div>
+      <h1>Your investments, clearly accounted for.</h1>
+      <p>Track your capital, returns and account status in one secure place.</p>
+    </div>
+    <div style="font-size: 13px; color: #A9B4C6"><p style="margin: 0 0 6px"><%= brand.tagline %></p><% if (brand.regulatory) { %><p style="margin: 0; font-size: 12px"><%= brand.regulatory %></p><% } %></div>
+  </aside>
+  <main class="auth-main">
+    <div class="auth-card">
+      <h2>Sign in to your account</h2>
+      <p class="muted" style="margin: 0 0 20px">Use the email and password provided by <%= brand.name %>.</p>
+      <% if (error) { %>
+      <div class="alert alert-error" role="alert" style="margin-bottom: 16px"><span><%= error %></span></div>
+      <% } %>
+      <form method="post" action="/login" class="stack" autocomplete="on">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="field">
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" required autocomplete="username" value="<%= email %>">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%">Sign in</button>
+      </form>
+      <p class="muted" style="font-size: 13px; margin-top: 20px">Forgot your password? Contact <a href="mailto:<%= brand.supportEmail %>"><%= brand.supportEmail %></a> to have it reset.</p>
+    </div>
+  </main>
+</div>
+<%- include('partials/foot') %>

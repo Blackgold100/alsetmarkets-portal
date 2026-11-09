@@ -1,0 +1,172 @@
+// Client-side crypto deposits and withdrawals.
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
+const { query, pool } = require('../db');
+const h = require('../helpers');
+const cx = require('../crypto');
+const { summarize } = require('../metrics');
+
+const router = express.Router();
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+const REQUIRE_KYC = (process.env.WITHDRAWAL_REQUIRES_KYC || 'true').toLowerCase() !== 'false';
+const MIN_WITHDRAWAL = Number(process.env.MIN_WITHDRAWAL || 10);
+const MIN_DEPOSIT = Number(process.env.MIN_DEPOSIT || 10);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 15, standardHeaders: 'draft-7', legacyHeaders: false,
+  handler: (req, res) => { h.flash(req, 'error', 'Too many requests. Please wait a few minutes and try again.'); res.redirect(req.path === '/deposit' ? '/funds/deposit' : '/funds/withdraw'); },
+});
+
+router.use(h.requireLogin);
+router.use((req, res, next) => {
+  if (req.user.role !== 'client') return res.redirect('/admin');
+  next();
+});
+
+async function depositWallets(userId) {
+  const { rows } = await query(
+    `SELECT * FROM firm_wallets WHERE active AND (user_id IS NULL OR user_id=$1)
+     ORDER BY (user_id IS NULL), asset, network, id`, [userId]);
+  // A client-specific address replaces the shared one for the same asset + network
+  const seen = new Set();
+  const out = [];
+  for (const w of rows) {
+    const key = w.asset + '|' + w.network;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(w);
+  }
+  for (const w of out) w.qr = await cx.qrDataUri(w.address);
+  return out;
+}
+async function balances(userId) {
+  const { rows } = await query('SELECT * FROM transactions WHERE user_id=$1', [userId]);
+  return summarize(rows);
+}
+
+// ---------- Deposit ----------
+router.get('/deposit', wrap(async (req, res) => {
+  const wallets = await depositWallets(req.user.id);
+  const { rows: recent } = await query(
+    "SELECT * FROM transactions WHERE user_id=$1 AND type='deposit' ORDER BY created_at DESC LIMIT 10", [req.user.id]);
+  res.render('client/deposit', { title: 'Add funds', wallets, recent, minDeposit: MIN_DEPOSIT, form: {} });
+}));
+
+router.post('/deposit', limiter, wrap(async (req, res) => {
+  const u = req.user;
+  const back = '/funds/deposit';
+  if (u.status === 'suspended' || u.status === 'closed') { h.flash(req, 'error', 'Deposits are unavailable while your account is ' + u.status + '.'); return res.redirect(back); }
+  const wallets = await depositWallets(u.id);
+  const w = wallets.find((x) => String(x.id) === String(req.body.wallet_id));
+  const amount = h.amount(req.body.amount);
+  const hash = h.str(req.body.tx_hash, 120);
+  if (!w) { h.flash(req, 'error', 'Choose the wallet you sent funds to.'); return res.redirect(back); }
+  if (!amount || amount < MIN_DEPOSIT) { h.flash(req, 'error', `Enter the amount sent (minimum ${h.money(MIN_DEPOSIT, u.base_currency)}).`); return res.redirect(back); }
+  if (!cx.validHash(w.network, hash)) { h.flash(req, 'error', `That doesn't look like a valid ${cx.networkName(w.network)} transaction hash. Copy it from your wallet or exchange's transaction details.`); return res.redirect(back); }
+  const { rows: dupe } = await query('SELECT 1 FROM transactions WHERE lower(tx_hash)=lower($1)', [hash]);
+  if (dupe.length) { h.flash(req, 'error', 'This transaction hash has already been submitted.'); return res.redirect(back); }
+
+  const { rows: [t] } = await query(
+    `INSERT INTO transactions (user_id,type,amount,status,tx_date,description,asset,network,wallet_address,wallet_memo,tx_hash,client_requested)
+     VALUES ($1,'deposit',$2,'pending',CURRENT_DATE,$3,$4,$5,$6,$7,$8,TRUE) RETURNING id`,
+    [u.id, amount, `Crypto deposit · ${w.asset} (${cx.networkName(w.network)})`, w.asset, w.network, w.address, w.memo, hash]);
+  await h.audit(req, 'deposit_submitted', u.id, { id: t.id, amount, asset: w.asset, network: w.network, tx_hash: hash });
+  h.flash(req, 'success', `Deposit of ${h.money(amount, u.base_currency)} submitted. It will be credited once confirmed on the blockchain and approved by our team.`);
+  res.redirect(back);
+}));
+
+// ---------- Withdraw ----------
+router.get('/withdraw', wrap(async (req, res) => {
+  const u = req.user;
+  const [{ rows: wallets }, s, { rows: recent }] = await Promise.all([
+    query('SELECT * FROM client_wallets WHERE user_id=$1 ORDER BY created_at DESC', [u.id]),
+    balances(u.id),
+    query("SELECT * FROM transactions WHERE user_id=$1 AND type='withdrawal' ORDER BY created_at DESC LIMIT 10", [u.id]),
+  ]);
+  const blockers = [];
+  if (u.status !== 'active') blockers.push(`Your account is ${u.status}. Withdrawals are available on active accounts only.`);
+  if (REQUIRE_KYC && u.kyc_status !== 'verified') blockers.push('Identity verification (KYC) must be completed before you can withdraw.');
+  res.render('client/withdraw', { title: 'Withdraw', wallets, summary: s, recent, blockers, minWithdrawal: MIN_WITHDRAWAL });
+}));
+
+router.post('/wallets', limiter, wrap(async (req, res) => {
+  const u = req.user;
+  const back = '/funds/withdraw#wallets';
+  const asset = h.oneOf(req.body.asset, cx.ASSETS, null);
+  const network = h.oneOf(req.body.network, Object.keys(cx.NETWORKS), null);
+  const address = h.str(req.body.address, 120);
+  const memo = h.optStr(req.body.memo, 60);
+  const label = h.optStr(req.body.label, 60);
+  if (!asset || !network) { h.flash(req, 'error', 'Choose a currency and network.'); return res.redirect(back); }
+  if (!cx.validPair(asset, network)) { h.flash(req, 'error', `${asset} is not supported on ${cx.networkName(network)}. Check the network and try again.`); return res.redirect(back); }
+  if (!cx.validAddress(network, address)) { h.flash(req, 'error', `That is not a valid ${cx.networkName(network)} address. Copy it directly from your wallet.`); return res.redirect(back); }
+  if (!(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) { h.flash(req, 'error', 'Your password was incorrect. The wallet was not added.'); return res.redirect(back); }
+  const { rows: count } = await query("SELECT COUNT(*)::int AS n FROM client_wallets WHERE user_id=$1 AND status<>'rejected'", [u.id]);
+  if (count[0].n >= 10) { h.flash(req, 'error', 'You can save up to 10 withdrawal wallets. Remove one first.'); return res.redirect(back); }
+  try {
+    const { rows: [w] } = await query(
+      'INSERT INTO client_wallets (user_id,label,asset,network,address,memo) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [u.id, label, asset, network, address, memo]);
+    await h.audit(req, 'withdrawal_wallet_added', u.id, { id: w.id, asset, network, address });
+  } catch (e) {
+    if (e.code === '23505') { h.flash(req, 'error', 'You have already saved this address.'); return res.redirect(back); }
+    throw e;
+  }
+  h.flash(req, 'success', 'Wallet saved. For your security, our team will verify it before it can receive withdrawals (usually within one business day).');
+  res.redirect(back);
+}));
+
+router.post('/wallets/:id/delete', wrap(async (req, res) => {
+  const { rows: [w] } = await query('SELECT * FROM client_wallets WHERE id=$1 AND user_id=$2', [Number(req.params.id) || 0, req.user.id]);
+  if (!w) return res.redirect('/funds/withdraw#wallets');
+  const { rows: inUse } = await query(
+    "SELECT 1 FROM transactions WHERE user_id=$1 AND type='withdrawal' AND status='pending' AND wallet_address=$2", [req.user.id, w.address]);
+  if (inUse.length) { h.flash(req, 'error', 'This wallet has a withdrawal in progress and cannot be removed yet.'); return res.redirect('/funds/withdraw#wallets'); }
+  await query('DELETE FROM client_wallets WHERE id=$1', [w.id]);
+  await h.audit(req, 'withdrawal_wallet_removed', req.user.id, { asset: w.asset, network: w.network, address: w.address });
+  h.flash(req, 'success', 'Wallet removed.');
+  res.redirect('/funds/withdraw#wallets');
+}));
+
+router.post('/withdraw', limiter, wrap(async (req, res) => {
+  const u = req.user;
+  const back = '/funds/withdraw';
+  if (u.status !== 'active') { h.flash(req, 'error', 'Withdrawals are available on active accounts only.'); return res.redirect(back); }
+  if (REQUIRE_KYC && u.kyc_status !== 'verified') { h.flash(req, 'error', 'Please complete identity verification before withdrawing.'); return res.redirect(back); }
+  const amount = h.amount(req.body.amount);
+  const { rows: [w] } = await query("SELECT * FROM client_wallets WHERE id=$1 AND user_id=$2 AND status='approved'", [Number(req.body.wallet_id) || 0, u.id]);
+  if (!w) { h.flash(req, 'error', 'Choose one of your verified withdrawal wallets.'); return res.redirect(back); }
+  if (!amount || amount < MIN_WITHDRAWAL) { h.flash(req, 'error', `The minimum withdrawal is ${h.money(MIN_WITHDRAWAL, u.base_currency)}.`); return res.redirect(back); }
+  if (!(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) { h.flash(req, 'error', 'Your password was incorrect. No withdrawal was requested.'); return res.redirect(back); }
+
+  // Lock the client's row so two simultaneous requests can't both pass the balance check
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [u.id]);
+    const { rows: txs } = await client.query('SELECT * FROM transactions WHERE user_id=$1', [u.id]);
+    const s = summarize(txs);
+    if (amount > s.available) {
+      await client.query('ROLLBACK');
+      h.flash(req, 'error', `You can withdraw up to ${h.money(s.available, u.base_currency)}.`);
+      return res.redirect(back);
+    }
+    const { rows: [t] } = await client.query(
+      `INSERT INTO transactions (user_id,type,amount,status,tx_date,description,asset,network,wallet_address,wallet_memo,client_requested)
+       VALUES ($1,'withdrawal',$2,'pending',CURRENT_DATE,$3,$4,$5,$6,$7,TRUE) RETURNING id`,
+      [u.id, amount, `Withdrawal to ${w.asset} (${cx.networkName(w.network)}) ${cx.shortAddr(w.address)}`, w.asset, w.network, w.address, w.memo]);
+    await client.query('COMMIT');
+    await h.audit(req, 'withdrawal_requested', u.id, { id: t.id, amount, asset: w.asset, network: w.network, address: w.address });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  h.flash(req, 'success', `Withdrawal of ${h.money(amount, u.base_currency)} requested. You will see the blockchain transaction here once it has been sent.`);
+  res.redirect(back);
+}));
+
+module.exports = router;

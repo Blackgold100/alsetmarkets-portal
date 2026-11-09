@@ -1,0 +1,287 @@
+<%- include('../partials/head') %>
+<% const cur = client.base_currency; const s = summary; %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head">
+    <div>
+      <p style="margin: 0 0 4px"><a href="/admin" style="text-decoration: none">← All clients</a></p>
+      <h1><%= client.full_name %></h1>
+      <p><span class="num"><%= client.account_no %></span> · <%= client.email %> ·
+        <span class="pill pill-<%= client.status %>"><%= titleCase(client.status) %></span>
+        <span class="pill pill-gold"><%= client.tier %></span>
+        <span class="pill pill-<%= client.kyc_status %>">KYC <%= titleCase(client.kyc_status) %></span></p>
+    </div>
+    <a class="btn btn-outline" href="/admin/clients/<%= client.id %>/preview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      View as client
+    </a>
+  </div>
+
+  <nav class="tabs-anchor" aria-label="Sections">
+    <a href="#transactions">Transactions</a><a href="#wallets">Crypto wallets</a><a href="#profile">Profile &amp; status</a><a href="#upgrade">Upgrade notice</a>
+    <a href="#holdings">Holdings</a><a href="#documents">Documents</a><a href="#notices">Notices</a><a href="#security">Security</a><a href="#activity">Activity</a>
+  </nav>
+
+  <section class="kpis" aria-label="Account figures">
+    <div class="card kpi accent"><div class="label">Total invested</div><div class="value num"><%= money(s.invested, cur) %></div><div class="sub">Deposits <%= money(s.deposits, cur) %> · Withdrawals <%= money(s.withdrawals, cur) %></div></div>
+    <div class="card kpi"><div class="label">Account balance</div><div class="value num"><%= money(s.balance, cur) %></div><div class="sub">Available <%= money(s.available, cur) %></div></div>
+    <div class="card kpi"><div class="label">Total return (ROI)</div><div class="value num <%= s.roi < 0 ? 'down' : 'up' %>"><%= signedMoney(s.roi, cur) %></div><div class="sub"><%= pct(s.roiPct) %> · Profit <%= money(s.profit, cur) %> · Loss <%= money(s.loss, cur) %> · Fees <%= money(s.fees, cur) %></div></div>
+    <div class="card kpi"><div class="label">Pending</div><div class="value num"><%= transactions.filter(function (t) { return t.status === 'pending'; }).length %></div><div class="sub">Deposits <%= money(s.pendingDeposits, cur) %> · Withdrawals <%= money(s.pendingWithdrawals, cur) %></div></div>
+  </section>
+
+  <!-- TRANSACTIONS -->
+  <section class="card" id="transactions">
+    <div class="card-head"><h2>Transactions</h2><span class="muted" style="font-size: 13px">Only <strong>completed</strong> transactions count toward balances.</span></div>
+    <form method="post" action="/admin/clients/<%= client.id %>/transactions" style="background: #F8F9FB; border-radius: 10px; padding: 16px; margin-bottom: 16px">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="form-grid">
+        <div class="field"><label for="tx-type">Type *</label>
+          <select id="tx-type" name="type" required>
+            <option value="deposit">Deposit (capital in)</option>
+            <option value="profit">Profit / ROI credit</option>
+            <option value="loss">Loss</option>
+            <option value="fee">Fee / charge</option>
+            <option value="withdrawal">Withdrawal (capital out)</option>
+          </select></div>
+        <div class="field"><label for="tx-amount">Amount (<%= cur %>) *</label><input id="tx-amount" name="amount" type="text" inputmode="decimal" required placeholder="e.g. 5,000.00"></div>
+        <div class="field"><label for="tx-date">Date *</label><input id="tx-date" name="tx_date" type="date" required value="<%= today %>"></div>
+        <div class="field"><label for="tx-status">Status</label>
+          <select id="tx-status" name="status"><option value="completed">Completed</option><option value="pending">Pending</option></select></div>
+        <div class="field"><label for="tx-ref">Reference</label><input id="tx-ref" name="reference" type="text" placeholder="Bank / wire ref."></div>
+        <div class="field"><label for="tx-desc">Description (client sees this)</label><input id="tx-desc" name="description" type="text" placeholder="e.g. Monthly trading profit — October"></div>
+      </div>
+      <details class="box" style="margin-top: 14px">
+        <summary>Crypto details (optional)</summary>
+        <div class="form-grid">
+          <div class="field"><label for="tx-asset">Currency</label><select id="tx-asset" name="asset" data-asset-select="#tx-net"><% ASSETS.forEach(function (a) { %><option value="<%= a %>"><%= a %></option><% }) %></select></div>
+          <div class="field"><label for="tx-net">Network</label><select id="tx-net" name="network"><option value="" data-assets="<%= ASSETS.join(',') %>">— Not crypto —</option><% Object.keys(NETWORKS).forEach(function (n) { %><option value="<%= n %>" data-assets="<%= Object.keys(ASSET_NETWORKS).filter(function (a) { return ASSET_NETWORKS[a].includes(n); }).join(',') %>"><%= NETWORKS[n].name %></option><% }) %></select></div>
+          <div class="field"><label for="tx-wallet">Wallet address</label><input id="tx-wallet" name="wallet_address" type="text" class="num" autocomplete="off"></div>
+          <div class="field"><label for="tx-hash">Transaction hash</label><input id="tx-hash" name="tx_hash" type="text" class="num" autocomplete="off"></div>
+        </div>
+      </details>
+      <div class="form-actions" style="margin-top: 14px"><button class="btn btn-primary" type="submit">Record transaction</button></div>
+    </form>
+    <% if (transactions.length) { %>
+      <div class="table-wrap"><%- include('../partials/tx-table', { rows: transactions, cur: cur, admin: true }) %></div>
+    <% } else { %><div class="empty">No transactions yet. Record the client's first deposit above.</div><% } %>
+  </section>
+
+  <!-- CRYPTO WALLETS -->
+  <section class="card" id="wallets">
+    <div class="card-head"><h2>Crypto wallets</h2><span class="muted" style="font-size: 13px">Verify a new withdrawal address with the client before approving it.</span></div>
+    <h3 style="font-size: 14px; margin: 4px 0 8px">Client's withdrawal addresses</h3>
+    <% if (clientWallets.length) { %>
+    <div class="table-wrap" style="margin-bottom: 18px">
+      <table class="data" style="min-width: 760px">
+        <thead><tr><th>Currency</th><th>Address</th><th>Added</th><th>Status</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% clientWallets.forEach(function (w) { %>
+          <tr>
+            <td><%= w.asset %> · <%= networkName(w.network) %><% if (w.label) { %><div class="muted" style="font-size: 12px"><%= w.label %></div><% } %></td>
+            <td class="num addr-small" style="max-width: 360px"><a href="<%= addrUrl(w.network, w.address) %>" target="_blank" rel="noopener noreferrer"><%= w.address %></a><%= w.memo ? ' · memo ' + w.memo : '' %></td>
+            <td class="muted" style="white-space: nowrap"><%= fmtDateTime(w.created_at) %></td>
+            <td><span class="pill pill-<%= w.status %>"><%= titleCase(w.status) %></span></td>
+            <td class="r" style="white-space: nowrap">
+              <% if (w.status !== 'approved') { %><form method="post" action="/admin/client-wallets/<%= w.id %>/status" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="approved"><button class="btn btn-outline btn-sm" type="submit">Approve</button></form><% } %>
+              <% if (w.status !== 'rejected') { %><form method="post" action="/admin/client-wallets/<%= w.id %>/status" class="inline" data-confirm="Reject this address?"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="rejected"><button class="btn btn-danger btn-sm" type="submit">Reject</button></form><% } %>
+              <form method="post" action="/admin/client-wallets/<%= w.id %>/delete" class="inline" data-confirm="Delete this address?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn-link" type="submit" style="color: var(--down)">Delete</button></form>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %><p class="muted" style="margin: 0 0 18px">The client hasn't added a withdrawal address yet. They add these from their Withdraw page.</p><% } %>
+
+    <h3 style="font-size: 14px; margin: 4px 0 8px">Personal deposit addresses for this client</h3>
+    <p class="muted" style="margin: 0 0 10px; font-size: 13px">Optional. Replaces the shared company address for the same currency and network. Shared addresses are managed under <a href="/admin/wallets">Wallets</a>.</p>
+    <% depositWallets.forEach(function (w) { %>
+      <div class="list-link" style="flex-wrap: wrap">
+        <span style="flex: 1 1 300px; min-width: 0"><strong><%= w.asset %> · <%= networkName(w.network) %></strong> <span class="pill pill-<%= w.active ? 'active' : 'neutral' %>"><%= w.active ? 'Showing' : 'Hidden' %></span><span class="num muted addr-small" style="display: block"><%= w.address %><%= w.memo ? ' · memo ' + w.memo : '' %></span></span>
+        <form method="post" action="/admin/wallets/<%= w.id %>/toggle" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline btn-sm" type="submit"><%= w.active ? 'Hide' : 'Show' %></button></form>
+        <form method="post" action="/admin/wallets/<%= w.id %>/delete" class="inline" data-confirm="Delete this deposit address?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Delete</button></form>
+      </div>
+    <% }) %>
+    <details class="box" style="margin-top: 10px"><summary>Add a personal deposit address</summary><%- include('../partials/firm-wallet-form', { userId: client.id }) %></details>
+  </section>
+
+  <div class="row" style="align-items: flex-start">
+    <!-- PROFILE -->
+    <section class="card grow" id="profile">
+      <h2 style="margin-bottom: 14px">Profile &amp; account status</h2>
+      <form method="post" action="/admin/clients/<%= client.id %>/profile">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="form-grid">
+          <div class="field"><label for="p-status">Account status</label>
+            <select id="p-status" name="status"><% STATUSES.forEach(function (x) { %><option value="<%= x %>" <%= client.status === x ? 'selected' : '' %>><%= titleCase(x) %></option><% }) %></select>
+            <span class="hint">Closed accounts cannot sign in.</span></div>
+          <div class="field"><label for="p-tier">Tier</label>
+            <select id="p-tier" name="tier"><% TIERS.forEach(function (x) { %><option <%= client.tier === x ? 'selected' : '' %>><%= x %></option><% }) %></select></div>
+          <div class="field"><label for="p-kyc">KYC status</label>
+            <select id="p-kyc" name="kyc_status"><% KYC.forEach(function (x) { %><option value="<%= x %>" <%= client.kyc_status === x ? 'selected' : '' %>><%= titleCase(x) %></option><% }) %></select></div>
+          <div class="field"><label for="p-kycd">KYC verified on</label><input id="p-kycd" name="kyc_verified_on" type="date" value="<%= client.kyc_verified_on || '' %>"></div>
+          <div class="field"><label for="p-name">Full name</label><input id="p-name" name="full_name" type="text" required value="<%= client.full_name %>"></div>
+          <div class="field"><label for="p-email">Email (sign-in)</label><input id="p-email" name="email" type="email" required value="<%= client.email %>"></div>
+          <div class="field"><label for="p-phone">Phone</label><input id="p-phone" name="phone" type="text" value="<%= client.phone || '' %>"></div>
+          <div class="field"><label for="p-country">Country</label><input id="p-country" name="country" type="text" value="<%= client.country || '' %>"></div>
+          <div class="field"><label for="p-acc">Account number</label><input id="p-acc" name="account_no" type="text" value="<%= client.account_no || '' %>"></div>
+          <div class="field"><label for="p-plan">Plan / product</label><input id="p-plan" name="plan_name" type="text" value="<%= client.plan_name || '' %>"></div>
+          <div class="field"><label for="p-risk">Risk profile</label><input id="p-risk" name="risk_profile" type="text" placeholder="e.g. Moderate" value="<%= client.risk_profile || '' %>"></div>
+          <div class="field"><label for="p-mgr">Account manager</label><input id="p-mgr" name="account_manager" type="text" value="<%= client.account_manager || '' %>"></div>
+          <div class="field"><label for="p-cur">Base currency</label>
+            <select id="p-cur" name="base_currency"><% CURRENCIES.forEach(function (x) { %><option <%= cur === x ? 'selected' : '' %>><%= x %></option><% }) %></select></div>
+          <div class="field"><label for="p-open">Account opened</label><input id="p-open" name="opened_on" type="date" value="<%= client.opened_on %>"></div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Save profile</button></div>
+      </form>
+    </section>
+
+    <!-- UPGRADE -->
+    <section class="card side" id="upgrade">
+      <h2 style="margin-bottom: 4px">Upgrade notice</h2>
+      <p class="muted" style="margin: 0 0 14px; font-size: 13px">Shown as a banner at the top of this client's dashboard.</p>
+      <form method="post" action="/admin/clients/<%= client.id %>/upgrade" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <label class="check"><input type="checkbox" name="upgrade_active" <%= client.upgrade_active ? 'checked' : '' %>> Show on dashboard</label>
+        <div class="field"><label for="u-tier">Upgrade to tier</label><input id="u-tier" name="upgrade_target_tier" type="text" list="tiers" value="<%= client.upgrade_target_tier || '' %>">
+          <datalist id="tiers"><% TIERS.forEach(function (x) { %><option value="<%= x %>"><% }) %></datalist></div>
+        <div class="field"><label for="u-title">Headline</label><input id="u-title" name="upgrade_title" type="text" placeholder="Your account is eligible for Professional" value="<%= client.upgrade_title || '' %>"></div>
+        <div class="field"><label for="u-msg">Message</label><textarea id="u-msg" name="upgrade_message" placeholder="Explain the benefits and any requirements."><%= client.upgrade_message || '' %></textarea></div>
+        <div class="field"><label for="u-cta">Button label</label><input id="u-cta" name="upgrade_cta_label" type="text" placeholder="Contact us to upgrade" value="<%= client.upgrade_cta_label || '' %>"></div>
+        <div class="field"><label for="u-url">Button link (optional)</label><input id="u-url" name="upgrade_cta_url" type="url" placeholder="https://www.alsetmarkets.com/upgrade" value="<%= client.upgrade_cta_url || '' %>"><span class="hint">Leave blank to open an email to support.</span></div>
+        <div><button class="btn btn-primary" type="submit">Save notice</button></div>
+      </form>
+    </section>
+  </div>
+
+  <!-- HOLDINGS -->
+  <section class="card" id="holdings">
+    <div class="card-head"><h2>Holdings / portfolio breakdown</h2><span class="muted" style="font-size: 13px">Optional. Drives the allocation chart on the client dashboard.</span></div>
+    <% if (alloc.rows.length) { %>
+    <div class="table-wrap" style="margin-bottom: 16px">
+      <table class="data" style="min-width: 820px">
+        <thead><tr><th>Holding</th><th>Asset class</th><th class="r">Invested (<%= cur %>)</th><th class="r">Current value (<%= cur %>)</th><th class="r">Weight</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% alloc.rows.forEach(function (r) { %>
+          <tr>
+            <td style="font-weight: 500"><%= r.name %></td>
+            <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="swatch" style="background: <%= r.color %>"></span><%= r.asset_class %></span></td>
+            <td class="r" colspan="2">
+              <form method="post" action="/admin/holdings/<%= r.id %>" style="display: flex; gap: 8px; justify-content: flex-end">
+                <input type="hidden" name="_csrf" value="<%= csrf %>">
+                <label class="sr-only" for="hi-<%= r.id %>">Invested</label><input id="hi-<%= r.id %>" name="amount_in" type="text" inputmode="decimal" value="<%= r.amount_in.toFixed(2) %>" style="max-width: 150px; text-align: right" class="num">
+                <label class="sr-only" for="hv-<%= r.id %>">Current value</label><input id="hv-<%= r.id %>" name="current_value" type="text" inputmode="decimal" value="<%= r.current_value.toFixed(2) %>" style="max-width: 150px; text-align: right" class="num">
+                <button class="btn btn-outline btn-sm" type="submit" style="min-height: 44px">Update</button>
+              </form>
+            </td>
+            <td class="r num"><%= r.weight.toFixed(1) %>%</td>
+            <td class="r">
+              <form method="post" action="/admin/holdings/<%= r.id %>/delete" class="inline" data-confirm="Remove <%= r.name %>?">
+                <input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
+    <details class="box" <%= alloc.rows.length ? '' : 'open' %>>
+      <summary>Add a holding</summary>
+      <form method="post" action="/admin/clients/<%= client.id %>/holdings">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="form-grid">
+          <div class="field"><label for="h-name">Name *</label><input id="h-name" name="name" type="text" required placeholder="e.g. EUR/USD managed strategy"></div>
+          <div class="field"><label for="h-class">Asset class *</label><input id="h-class" name="asset_class" type="text" required list="classes" placeholder="e.g. Forex">
+            <datalist id="classes"><option value="Forex"><option value="Commodities"><option value="Indices"><option value="Equities"><option value="Crypto"><option value="Fixed income"><option value="Cash"></datalist></div>
+          <div class="field"><label for="h-in">Amount invested *</label><input id="h-in" name="amount_in" type="text" inputmode="decimal" required></div>
+          <div class="field"><label for="h-val">Current value *</label><input id="h-val" name="current_value" type="text" inputmode="decimal" required></div>
+          <div class="field"><label for="h-notes">Note</label><input id="h-notes" name="notes" type="text"></div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Add holding</button></div>
+      </form>
+    </details>
+  </section>
+
+  <div class="row" style="align-items: flex-start">
+    <!-- DOCUMENTS -->
+    <section class="card grow" id="documents">
+      <h2 style="margin-bottom: 4px">Statements &amp; documents</h2>
+      <p class="muted" style="margin: 0 0 12px; font-size: 13px">Upload the PDF to Google Drive or Dropbox, set sharing to "anyone with the link", and paste the link here.</p>
+      <% documents.forEach(function (d) { %>
+        <div class="list-link">
+          <span style="flex: 1 1 auto; min-width: 0"><a href="<%= d.url %>" target="_blank" rel="noopener noreferrer" style="font-weight: 500"><%= d.title %></a><span class="muted" style="display: block; font-size: 12px">Issued <%= fmtDate(d.issued_on) %></span></span>
+          <form method="post" action="/admin/documents/<%= d.id %>/delete" class="inline" data-confirm="Remove this document?">
+            <input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Remove</button>
+          </form>
+        </div>
+      <% }) %>
+      <form method="post" action="/admin/clients/<%= client.id %>/documents" style="margin-top: 12px">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="form-grid">
+          <div class="field"><label for="d-title">Title *</label><input id="d-title" name="title" type="text" required placeholder="October 2026 statement"></div>
+          <div class="field"><label for="d-url">Link *</label><input id="d-url" name="url" type="url" required placeholder="https://drive.google.com/..."></div>
+          <div class="field"><label for="d-date">Issued on</label><input id="d-date" name="issued_on" type="date" value="<%= today %>"></div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Add document</button></div>
+      </form>
+    </section>
+
+    <!-- NOTICES -->
+    <section class="card side" id="notices">
+      <h2 style="margin-bottom: 4px">Notices for this client</h2>
+      <p class="muted" style="margin: 0 0 12px; font-size: 13px">For messages to everyone, use <a href="/admin/notices">Announcements</a>.</p>
+      <% clientNotices.forEach(function (n) { %>
+        <div style="border-top: 1px solid var(--line-2); padding: 10px 0; display: flex; gap: 10px; align-items: flex-start">
+          <div style="flex: 1 1 auto; min-width: 0"><span class="pill pill-<%= n.active ? n.level : 'neutral' %>"><%= n.active ? titleCase(n.level) : 'Hidden' %></span> <strong><%= n.title %></strong><div class="muted" style="font-size: 12px"><%= fmtDate(n.created_at.toISOString()) %></div></div>
+          <form method="post" action="/admin/notices/<%= n.id %>/toggle" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn-link" type="submit"><%= n.active ? 'Hide' : 'Show' %></button></form>
+          <form method="post" action="/admin/notices/<%= n.id %>/delete" class="inline" data-confirm="Delete this notice?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn-link" type="submit" style="color: var(--down)">Delete</button></form>
+        </div>
+      <% }) %>
+      <form method="post" action="/admin/notices" class="stack" style="margin-top: 10px">
+        <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="user_id" value="<%= client.id %>">
+        <div class="field"><label for="n-title">Title</label><input id="n-title" name="title" type="text" required></div>
+        <div class="field"><label for="n-body">Message</label><textarea id="n-body" name="body" required></textarea></div>
+        <div class="field"><label for="n-level">Style</label><select id="n-level" name="level"><option value="info">Information</option><option value="warning">Action needed</option><option value="success">Good news</option></select></div>
+        <div><button class="btn btn-primary" type="submit">Post notice</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div class="row" style="align-items: flex-start">
+    <!-- SECURITY -->
+    <section class="card side stack" id="security">
+      <h2>Sign-in &amp; security</h2>
+      <dl class="facts">
+        <dt>Last sign-in</dt><dd><%= client.last_login_at ? fmtDateTime(client.last_login_at) : 'Never' %></dd>
+        <dt>Password</dt><dd><%= client.must_change_password ? 'Temporary (not yet changed)' : 'Set by client' %></dd>
+        <dt>Locked</dt><dd><%= client.locked_until && new Date(client.locked_until) > new Date() ? 'Until ' + fmtDateTime(client.locked_until) : 'No' %></dd>
+      </dl>
+      <% if (tempPassword) { %>
+        <div class="alert alert-success" role="status"><span><strong>New temporary password</strong><span class="num" style="font-size: 16px"><%= tempPassword %></span><br>Shown only once. The client must change it at next sign-in.</span></div>
+      <% } %>
+      <form method="post" action="/admin/clients/<%= client.id %>/reset-password" data-confirm="Reset this client's password? They will be signed out everywhere.">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <button class="btn btn-outline" type="submit">Reset password</button>
+      </form>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section class="card grow" id="activity">
+      <h2 style="margin-bottom: 8px">Activity on this account</h2>
+      <% if (log.length) { %>
+      <div class="table-wrap">
+        <table class="data" style="min-width: 520px">
+          <thead><tr><th>When</th><th>Who</th><th>Action</th></tr></thead>
+          <tbody>
+          <% log.forEach(function (a) { %>
+            <tr><td class="muted" style="white-space: nowrap"><%= fmtDateTime(a.created_at) %></td><td><%= a.actor_email || '—' %></td><td><%= titleCase(a.action) %></td></tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <% } else { %><div class="empty">No activity yet.</div><% } %>
+    </section>
+  </div>
+</main>
+<%- include('../partials/foot') %>

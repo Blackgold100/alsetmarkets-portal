@@ -1,0 +1,19 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <div class="page-head">
+    <div><h1>Transactions</h1><p>Every deposit, withdrawal, profit, loss and fee on your account.</p></div>
+  </div>
+  <section class="card">
+    <nav class="seg" aria-label="Filter by type" style="margin-bottom: 14px">
+      <a href="/transactions" aria-current="<%= !type ? 'true' : 'false' %>">All</a>
+      <% ['deposit', 'withdrawal', 'profit', 'loss', 'fee'].forEach(function (t) { %>
+        <a href="/transactions?type=<%= t %>" aria-current="<%= type === t ? 'true' : 'false' %>"><%= titleCase(t) %><%= t === 'loss' ? 'es' : 's' %></a>
+      <% }) %>
+    </nav>
+    <% if (transactions.length) { %>
+      <div class="table-wrap"><%- include('../partials/tx-table', { rows: transactions, cur: user.base_currency, admin: false }) %></div>
+    <% } else { %><div class="empty">No transactions to show.</div><% } %>
+  </section>
+  <%- include('../partials/legal') %>
+</main>
+<%- include('../partials/foot') %>

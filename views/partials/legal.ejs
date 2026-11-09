@@ -1,0 +1,5 @@
+<footer class="legal">
+  <p>Total invested = completed deposits minus withdrawals. Account balance = total invested plus profits, minus losses and fees. Total return (ROI) = profits − losses − fees, shown as a percentage of total invested. Period and monthly returns exclude the effect of deposits and withdrawals.</p>
+  <p>Trading and investing involve risk, including the possible loss of capital. Past performance is not a reliable indicator of future results.<%= brand.regulatory ? ' ' + brand.regulatory : '' %></p>
+  <p>© <%= new Date().getFullYear() %> <%= brand.name %> · <a href="<%= brand.website %>" rel="noopener"><%= brand.website.replace(/^https?:\/\//, '') %></a> · <a href="mailto:<%= brand.supportEmail %>"><%= brand.supportEmail %></a></p>
+</footer>

@@ -1,0 +1,62 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div><h1>Wallets</h1><p>Company deposit addresses shown to clients, and client withdrawal addresses awaiting your verification.</p></div></div>
+
+  <section class="card" id="deposit">
+    <div class="card-head"><h2>Company deposit addresses</h2><span class="muted" style="font-size: 13px">Shared addresses appear on every client's Add funds page. To give one client a personal address, add it from their client record.</span></div>
+    <% if (wallets.length) { %>
+    <div class="table-wrap" style="margin-bottom: 16px">
+      <table class="data" style="min-width: 860px">
+        <thead><tr><th>Currency</th><th>Address</th><th>Shown to</th><th>Label</th><th>Status</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% wallets.forEach(function (w) { %>
+          <tr>
+            <td style="font-weight: 600"><%= w.asset %><div class="muted" style="font-weight: 400; font-size: 12px"><%= networkName(w.network) %></div></td>
+            <td class="num addr-small" style="max-width: 360px"><a href="<%= addrUrl(w.network, w.address) %>" target="_blank" rel="noopener noreferrer"><%= w.address %></a><%= w.memo ? ' · memo ' + w.memo : '' %></td>
+            <td><% if (w.user_id) { %><a href="/admin/clients/<%= w.user_id %>#wallets"><%= w.full_name %></a><% } else { %>All clients<% } %></td>
+            <td class="muted"><%= w.label || '—' %></td>
+            <td><span class="pill pill-<%= w.active ? 'active' : 'neutral' %>"><%= w.active ? 'Showing' : 'Hidden' %></span></td>
+            <td class="r" style="white-space: nowrap">
+              <form method="post" action="/admin/wallets/<%= w.id %>/toggle" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline btn-sm" type="submit"><%= w.active ? 'Hide' : 'Show' %></button></form>
+              <form method="post" action="/admin/wallets/<%= w.id %>/delete" class="inline" data-confirm="Delete this deposit address? Clients will no longer see it."><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Delete</button></form>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
+    <details class="box" <%= wallets.length ? '' : 'open' %>>
+      <summary>Add a shared deposit address</summary>
+      <%- include('../partials/firm-wallet-form', { userId: null }) %>
+    </details>
+  </section>
+
+  <section class="card" id="withdrawal">
+    <div class="card-head"><h2>Client withdrawal addresses</h2><span class="muted" style="font-size: 13px">Verify with the client (e.g. by phone) before approving a new address.</span></div>
+    <% if (clientWallets.length) { %>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 900px">
+        <thead><tr><th>Client</th><th>Currency</th><th>Address</th><th>Added</th><th>Status</th><th class="r">Actions</th></tr></thead>
+        <tbody>
+        <% clientWallets.forEach(function (w) { %>
+          <tr>
+            <td><a href="/admin/clients/<%= w.user_id %>#wallets" style="font-weight: 500"><%= w.full_name %></a><div class="num muted" style="font-size: 12px"><%= w.account_no %></div></td>
+            <td><%= w.asset %> · <%= networkName(w.network) %><% if (w.label) { %><div class="muted" style="font-size: 12px"><%= w.label %></div><% } %></td>
+            <td class="num addr-small" style="max-width: 340px"><a href="<%= addrUrl(w.network, w.address) %>" target="_blank" rel="noopener noreferrer"><%= w.address %></a><%= w.memo ? ' · memo ' + w.memo : '' %></td>
+            <td class="muted" style="white-space: nowrap"><%= fmtDateTime(w.created_at) %></td>
+            <td><span class="pill pill-<%= w.status %>"><%= titleCase(w.status) %></span></td>
+            <td class="r" style="white-space: nowrap">
+              <% if (w.status !== 'approved') { %><form method="post" action="/admin/client-wallets/<%= w.id %>/status" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="approved"><input type="hidden" name="back" value="wallets"><button class="btn btn-outline btn-sm" type="submit">Approve</button></form><% } %>
+              <% if (w.status !== 'rejected') { %><form method="post" action="/admin/client-wallets/<%= w.id %>/status" class="inline" data-confirm="Reject this withdrawal address?"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="rejected"><input type="hidden" name="back" value="wallets"><button class="btn btn-danger btn-sm" type="submit">Reject</button></form><% } %>
+            </td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %><div class="empty">No client withdrawal addresses yet.</div><% } %>
+  </section>
+</main>
+<%- include('../partials/foot') %>

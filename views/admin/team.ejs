@@ -1,0 +1,21 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 1000px">
+  <div class="page-head">
+    <div><h1>Team</h1><p>Staff with administrator access. Every change they make is recorded in the audit log.</p></div>
+    <a class="btn btn-outline" href="/admin/clients/new">Add administrator</a>
+  </div>
+  <section class="card">
+    <div class="table-wrap">
+      <table class="data" style="min-width: 560px">
+        <thead><tr><th>Name</th><th>Email</th><th>Last sign-in</th><th>Added</th></tr></thead>
+        <tbody>
+        <% admins.forEach(function (a) { %>
+          <tr><td style="font-weight: 500"><%= a.full_name %><%= a.id === user.id ? ' (you)' : '' %></td><td><%= a.email %></td><td class="muted"><%= a.last_login_at ? fmtDateTime(a.last_login_at) : 'Never' %></td><td class="muted"><%= fmtDate(a.created_at.toISOString()) %></td></tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size: 13px; margin: 14px 0 0">To add staff, use <a href="/admin/clients/new">Add client</a> and choose "Administrator" as the user type. <a href="/account/password">Change your own password</a>.</p>
+  </section>
+</main>
+<%- include('../partials/foot') %>

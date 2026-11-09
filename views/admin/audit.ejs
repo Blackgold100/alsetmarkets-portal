@@ -1,0 +1,24 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <div class="page-head"><div><h1>Audit log</h1><p>The last 300 actions taken in the portal. Entries cannot be edited or deleted from the app.</p></div></div>
+  <section class="card">
+    <div class="table-wrap">
+      <table class="data" style="min-width: 900px">
+        <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Client</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody>
+        <% log.forEach(function (a) { %>
+          <tr>
+            <td class="muted" style="white-space: nowrap"><%= fmtDateTime(a.created_at) %></td>
+            <td><%= a.actor_email || '—' %></td>
+            <td style="font-weight: 500"><%= titleCase(a.action) %></td>
+            <td><% if (a.target_user_id) { %><a href="/admin/clients/<%= a.target_user_id %>"><%= a.target_name || ('#' + a.target_user_id) %></a><% } else { %>—<% } %></td>
+            <td class="num muted" style="font-size: 12px; max-width: 380px; overflow-wrap: anywhere"><%= a.details ? JSON.stringify(a.details) : '' %></td>
+            <td class="num muted" style="font-size: 12px"><%= a.ip || '' %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<%- include('../partials/foot') %>

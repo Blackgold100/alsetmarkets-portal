@@ -1,0 +1,92 @@
+<%- include('../partials/head') %>
+<% const cur = user.base_currency; const s = summary; const approved = wallets.filter(function (w) { return w.status === 'approved'; }); %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head">
+    <div><h1>Withdraw</h1><p>Withdrawals are paid in cryptocurrency to a wallet you have saved and we have verified.</p></div>
+    <a class="btn btn-outline" href="/">Back to overview</a>
+  </div>
+
+  <section class="kpis" aria-label="Balances">
+    <div class="card kpi accent"><div class="label">Available to withdraw</div><div class="value num"><%= money(s.available, cur) %></div><div class="sub">Account balance <span class="num"><%= money(s.balance, cur) %></span></div></div>
+    <div class="card kpi"><div class="label">Withdrawals in progress</div><div class="value num"><%= money(s.pendingWithdrawals, cur) %></div><div class="sub">Reserved until paid</div></div>
+    <div class="card kpi"><div class="label">Verified wallets</div><div class="value num"><%= approved.length %></div><div class="sub"><%= wallets.filter(function (w) { return w.status === 'pending'; }).length %> awaiting verification</div></div>
+  </section>
+
+  <% blockers.forEach(function (b) { %>
+    <div class="alert alert-warning" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><span><%= b %> Contact <a href="mailto:<%= brand.supportEmail %>"><%= brand.supportEmail %></a> for help.</span></div>
+  <% }) %>
+
+  <div class="row" style="align-items: flex-start">
+    <section class="card side" aria-label="Request a withdrawal">
+      <h2 style="margin-bottom: 14px">Request a withdrawal</h2>
+      <% if (blockers.length) { %>
+        <div class="empty">Withdrawals are unavailable right now.</div>
+      <% } else if (!approved.length) { %>
+        <div class="empty">Add a wallet below. Once our team verifies it, you can withdraw to it.</div>
+      <% } else { %>
+      <form method="post" action="/funds/withdraw" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="field"><label for="w-wallet">Send to</label>
+          <select id="w-wallet" name="wallet_id" required>
+            <% approved.forEach(function (w) { %><option value="<%= w.id %>"><%= (w.label ? w.label + ' · ' : '') + w.asset + ' · ' + networkName(w.network) + ' · ' + shortAddr(w.address) %></option><% }) %>
+          </select></div>
+        <div class="field"><label for="w-amount">Amount (<%= cur %>)</label><input id="w-amount" name="amount" type="text" inputmode="decimal" required><span class="hint">Between <%= money(minWithdrawal, cur) %> and <%= money(s.available, cur) %>. Network fees may be deducted from the amount sent.</span></div>
+        <div class="field"><label for="w-pass">Confirm with your password</label><input id="w-pass" name="password" type="password" required autocomplete="current-password"></div>
+        <button class="btn btn-primary" type="submit">Request withdrawal</button>
+      </form>
+      <% } %>
+    </section>
+
+    <section class="card grow" aria-label="Your withdrawals">
+      <h2 style="margin-bottom: 10px">Your recent withdrawals</h2>
+      <%- include('../partials/crypto-history', { rows: recent, kind: 'withdrawal', cur: cur }) %>
+    </section>
+  </div>
+
+  <section class="card" id="wallets" aria-label="Withdrawal wallets">
+    <div class="card-head"><h2>Your withdrawal wallets</h2><span class="muted" style="font-size: 13px">New wallets are verified by our team before first use. This protects you if your login is ever compromised.</span></div>
+    <% if (wallets.length) { %>
+    <div class="table-wrap" style="margin-bottom: 16px">
+      <table class="data" style="min-width: 700px">
+        <thead><tr><th>Label</th><th>Currency</th><th>Address</th><th>Status</th><th>Added</th><th></th></tr></thead>
+        <tbody>
+        <% wallets.forEach(function (w) { %>
+          <tr>
+            <td style="font-weight: 500"><%= w.label || '—' %></td>
+            <td><%= w.asset %> · <%= networkName(w.network) %></td>
+            <td class="num" style="font-size: 12px; overflow-wrap: anywhere; max-width: 320px"><%= w.address %><%= w.memo ? ' · memo ' + w.memo : '' %></td>
+            <td><span class="pill pill-<%= w.status %>"><%= w.status === 'approved' ? 'Verified' : w.status === 'pending' ? 'Awaiting verification' : 'Rejected' %></span></td>
+            <td class="muted"><%= fmtDate(w.created_at.toISOString()) %></td>
+            <td class="r"><form method="post" action="/funds/wallets/<%= w.id %>/delete" class="inline" data-confirm="Remove this wallet?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Remove</button></form></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
+    <details class="box" <%= wallets.length ? '' : 'open' %>>
+      <summary>Add a withdrawal wallet</summary>
+      <form method="post" action="/funds/wallets">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <div class="form-grid">
+          <div class="field"><label for="cw-asset">Currency</label>
+            <select id="cw-asset" name="asset" required data-asset-select="#cw-network">
+              <% ASSETS.forEach(function (a) { %><option value="<%= a %>"><%= a %></option><% }) %>
+            </select></div>
+          <div class="field"><label for="cw-network">Network</label>
+            <select id="cw-network" name="network" required>
+              <% Object.keys(NETWORKS).forEach(function (n) { %><option value="<%= n %>" data-assets="<%= Object.keys(ASSET_NETWORKS).filter(function (a) { return ASSET_NETWORKS[a].includes(n); }).join(',') %>"><%= NETWORKS[n].name %></option><% }) %>
+            </select></div>
+          <div class="field"><label for="cw-label">Label (optional)</label><input id="cw-label" name="label" type="text" placeholder="e.g. My Binance USDT"></div>
+          <div class="field" style="grid-column: 1 / -1"><label for="cw-address">Wallet address</label><input id="cw-address" name="address" type="text" required autocomplete="off" spellcheck="false" class="num"><span class="hint">Paste it from your wallet. Double-check that the network matches what your wallet or exchange expects.</span></div>
+          <div class="field"><label for="cw-memo">Memo / tag (if your exchange requires one)</label><input id="cw-memo" name="memo" type="text" autocomplete="off"></div>
+          <div class="field"><label for="cw-pass">Confirm with your password</label><input id="cw-pass" name="password" type="password" required autocomplete="current-password"></div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Save wallet</button></div>
+      </form>
+    </details>
+  </section>
+  <%- include('../partials/legal') %>
+</main>
+<%- include('../partials/foot') %>

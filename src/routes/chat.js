@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { query } = require('../db');
 const h = require('../helpers');
 const { summarize } = require('../metrics');
+const { inPlansValue } = require('../plans');
 
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 const MAX_LEN = 2000;
@@ -139,7 +140,7 @@ admin.get('/:id', h.requireAdmin, wrap(async (req, res) => {
   const filter = h.oneOf(req.query.filter, ['open', 'closed', 'all'], 'open');
   res.render('admin/chat', {
     title: `Chat · ${t.full_name}`, threads: await listThreads(filter), filter, adminArea: true,
-    thread: threadSummary(t), threadUserId: t.user_id, clientUser, summary: summarize(tx),
+    thread: threadSummary(t), threadUserId: t.user_id, clientUser, summary: summarize(tx, await inPlansValue(t.user_id)),
     quickReplies: [
       'Thanks for reaching out. Let me look into this for you now.',
       'Your deposit has been received and is being confirmed on the blockchain. It will be credited shortly.',

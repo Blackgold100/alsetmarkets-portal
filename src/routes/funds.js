@@ -6,6 +6,7 @@ const { query, pool } = require('../db');
 const h = require('../helpers');
 const cx = require('../crypto');
 const { summarize } = require('../metrics');
+const { inPlansValue } = require('../plans');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -43,7 +44,7 @@ async function depositWallets(userId) {
 }
 async function balances(userId) {
   const { rows } = await query('SELECT * FROM transactions WHERE user_id=$1', [userId]);
-  return summarize(rows);
+  return summarize(rows, await inPlansValue(userId));
 }
 
 // ---------- Deposit ----------
@@ -147,7 +148,7 @@ router.post('/withdraw', limiter, wrap(async (req, res) => {
     await client.query('BEGIN');
     await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [u.id]);
     const { rows: txs } = await client.query('SELECT * FROM transactions WHERE user_id=$1', [u.id]);
-    const s = summarize(txs);
+    const s = summarize(txs, await inPlansValue(u.id, client));
     if (amount > s.available) {
       await client.query('ROLLBACK');
       h.flash(req, 'error', `You can withdraw up to ${h.money(s.available, u.base_currency)}.`);

@@ -6,6 +6,8 @@ A secure investor portal. Clients log in to see their dashboard; your team enter
 
 **Crypto deposits & withdrawals:** clients see your company wallet addresses (with QR codes and copy buttons), send funds, and submit the transaction hash. They save their own withdrawal wallets, which an admin must verify before first use, and request withdrawals with password confirmation. Every request goes to your approval queue, with block-explorer links. Supported: USDT, USDC, BTC, ETH, BNB and SOL on Tron (TRC20), Ethereum (ERC20), BNB Smart Chain (BEP20), Polygon, Solana and Bitcoin.
 
+**Investment plans:** Mining, Stocks and Crypto Trading. Clients move part of their available balance into a plan, confirming with their password and accepting the risk and lock-in terms. Each plan has its own minimum, lock-in period and risk level, all editable. Every week an admin enters each plan's **actual** result for the period. After a preview, the portal credits or debits every investor automatically and pro-rata, with a part-period share for investments that started mid-week. The most recent result can be undone. Clients see each plan's real past results, never a promised rate.
+
 **Live support chat:** a chat button on every client page shows whether support is online. Admins answer from **Admin → Support chat**, which has an unread badge in the menu, optional desktop alerts, quick replies, assign/close controls and the client's balances beside the conversation. Messages update every few seconds. If no admin is online, the client gets an automatic reply saying the team will answer soon.
 
 **Admin console:** add clients (with one-time temporary passwords), record deposits / profits / losses / fees / withdrawals, approve or reject pending requests, set account status, tier and KYC, write a per-client upgrade notice, add holdings and statement links, post announcements, reset passwords, preview any client's dashboard, and review a full audit log.
@@ -65,6 +67,15 @@ Open **Tools → Secrets** and add:
 - **Deposit:** the client sends crypto and submits the amount and transaction hash. A **pending deposit** appears in your queue on the Clients page. Check it on the block explorer (click the Tx link), then click **Approve** to credit their balance.
 - **New withdrawal wallet:** the client adds an address, which appears under **Withdrawal addresses to verify**. Confirm it with the client (phone or video call), then **Approve**.
 - **Withdrawal:** the client requests an amount (it can't exceed their available balance) and the amount is reserved straight away. Send the crypto from your wallet, paste the payout tx hash into the queue, and click **Mark paid**. The client sees the explorer link. Click **Reject** instead to release the reserved amount.
+
+## Weekly plan results
+1. Go to **Admin → Plans**. A plan with no result in the last 7 days is flagged **Weekly result due**.
+2. Click **Post this week's result**. The period dates are filled in for you.
+3. Enter the plan's actual return for the week, net of costs, from your trading, mining or brokerage records (e.g. `1.35` or `-0.80`). Add a note naming the source document.
+4. Click **Preview distribution** to see every investor's change, then **Post result**.
+5. Made a mistake? Click **Undo** on the latest result in **Results history**. It reverses every investor's entry.
+
+Money in a plan is still part of the client's balance, but it's excluded from **Available to withdraw** until they move it out after the lock-in. Admins can **Release early** on a client's documented request.
 
 ## Support chat
 - Keep **Admin → Support chat** open in a browser tab while you're on duty. Clients see "Online" while any admin has the portal open, and "Offline" after about 3 minutes away.

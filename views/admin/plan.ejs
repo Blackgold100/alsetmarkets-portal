@@ -1,0 +1,141 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head">
+    <div>
+      <p style="margin: 0 0 4px"><a href="/admin/plans" style="text-decoration: none">← All plans</a></p>
+      <h1><%= plan.name %> plan</h1>
+      <p><%= plan.risk_level %> risk · minimum <%= money(plan.min_amount, 'USD', 0) %> · <%= plan.lock_days %>-day lock-in · <%= plan.active ? 'open to new investment' : 'closed to new investment' %></p>
+    </div>
+  </div>
+  <nav class="tabs-anchor" aria-label="Sections"><a href="#post">Post result</a><a href="#history">Results history</a><a href="#investors">Investors</a><a href="#settings">Settings</a></nav>
+
+  <section class="kpis" aria-label="Plan figures">
+    <div class="card kpi accent"><div class="label">Invested now</div><div class="value num"><%= money(stats.aum, 'USD') %></div><div class="sub"><%= stats.investors %> investor<%= stats.investors === 1 ? '' : 's' %></div></div>
+    <div class="card kpi"><div class="label">Results posted</div><div class="value num"><%= results.length %></div><div class="sub">Last to <%= stats.last_period_end ? fmtDate(stats.last_period_end) : '—' %></div></div>
+    <div class="card kpi"><div class="label">Last 12 periods</div><div class="value num <%= stats.recentCompound < 0 ? 'down' : stats.recentCompound > 0 ? 'up' : '' %>"><%= stats.recentCompound === null ? '—' : pct(stats.recentCompound) %></div><div class="sub">Compounded, as shown to clients</div></div>
+  </section>
+
+  <!-- POST RESULT -->
+  <section class="card" id="post">
+    <h2 style="margin-bottom: 4px">Post a weekly result</h2>
+    <p class="muted" style="margin: 0 0 14px; font-size: 13px">Enter the plan's <strong>actual</strong> return for the period, net of costs, from your trading, mining or brokerage records. Use a minus sign for a loss. You'll see exactly what each investor receives before anything is posted.</p>
+    <% if (typeof previewError !== 'undefined' && previewError) { %><div class="alert alert-error" role="alert" style="margin-bottom: 14px"><span><%= previewError %></span></div><% } %>
+    <form method="post" action="/admin/plans/<%= plan.id %>/preview">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="form-grid">
+        <div class="field"><label for="ps">Period start</label><input id="ps" name="period_start" type="date" required value="<%= form.period_start || suggest.start %>"></div>
+        <div class="field"><label for="pe">Period end</label><input id="pe" name="period_end" type="date" required max="<%= today %>" value="<%= form.period_end || suggest.end %>"></div>
+        <div class="field"><label for="pr">Return for the period (%)</label><input id="pr" name="return_pct" type="text" inputmode="decimal" required placeholder="e.g. 1.35 or -0.80" value="<%= form.return_pct || '' %>" class="num"><span class="hint">Limited to ±<%= maxPct %>% per period as a safety check.</span></div>
+        <div class="field"><label for="pn">Internal note (optional)</label><input id="pn" name="note" type="text" placeholder="e.g. Source: broker statement #4471" value="<%= form.note || '' %>"></div>
+      </div>
+      <div class="form-actions"><button class="btn btn-outline" type="submit">Preview distribution</button></div>
+    </form>
+
+    <% if (preview) { %>
+    <div class="preview-box" role="region" aria-label="Distribution preview">
+      <h3 style="font-size: 15px; margin: 0 0 6px">Preview: <span class="num <%= preview.pct < 0 ? 'down' : 'up' %>"><%= (preview.pct >= 0 ? '+' : '') + preview.pct.toFixed(2) %>%</span> for <%= fmtDate(preview.start) %> to <%= fmtDate(preview.end) %></h3>
+      <p style="margin: 0 0 12px"><strong><%= preview.dist.length %></strong> investment<%= preview.dist.length === 1 ? '' : 's' %> will be <%= preview.total < 0 ? 'debited' : 'credited' %> a total of <strong class="num"><%= signedMoney(preview.total) %></strong>. Investments started part-way through the period get a share for the days they were in.</p>
+      <% if (preview.dist.length) { %>
+      <div class="table-wrap" style="max-height: 320px; overflow-y: auto; margin-bottom: 12px">
+        <table class="data" style="min-width: 600px">
+          <thead><tr><th>Client</th><th>Started</th><th class="r">Value now</th><th class="r">Share of period</th><th class="r">Change</th><th class="r">New value</th></tr></thead>
+          <tbody>
+          <% preview.dist.forEach(function (d) { %>
+            <tr>
+              <td><%= d.position.full_name %> <span class="num muted"><%= d.position.account_no %></span></td>
+              <td class="muted"><%= fmtDate(d.position.started_on) %></td>
+              <td class="r num"><%= money(d.position.value) %></td>
+              <td class="r num"><%= Math.round(d.factor * 100) %>%</td>
+              <td class="r num <%= d.pnl < 0 ? 'down' : d.pnl > 0 ? 'up' : '' %>" style="font-weight: 600"><%= signedMoney(d.pnl) %></td>
+              <td class="r num"><%= money(d.position.value + d.pnl) %></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <% } %>
+      <form method="post" action="/admin/plans/<%= plan.id %>/results" data-confirm="Post <%= (preview.pct >= 0 ? '+' : '') + preview.pct.toFixed(2) %>% for <%= plan.name %> and update <%= preview.dist.length %> investor account(s)?">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <input type="hidden" name="period_start" value="<%= preview.start %>"><input type="hidden" name="period_end" value="<%= preview.end %>">
+        <input type="hidden" name="return_pct" value="<%= preview.pct %>"><input type="hidden" name="note" value="<%= preview.note || '' %>">
+        <input type="hidden" name="confirm" value="yes">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap">
+          <button class="btn btn-gold" type="submit">Post result and update <%= preview.dist.length %> investor<%= preview.dist.length === 1 ? '' : 's' %></button>
+          <a class="btn btn-outline" href="/admin/plans/<%= plan.id %>#post">Cancel</a>
+        </div>
+      </form>
+    </div>
+    <% } %>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="card" id="history">
+    <div class="card-head"><h2>Results history</h2><span class="muted" style="font-size: 13px">Only the most recent result can be undone, which reverses it for every investor.</span></div>
+    <% if (results.length) { %>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 820px">
+        <thead><tr><th>Period</th><th class="r">Return</th><th class="r">Investments</th><th class="r">Total distributed</th><th>Posted</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+        <% results.forEach(function (r, i) { %>
+          <tr>
+            <td style="white-space: nowrap"><%= fmtDate(r.period_start) %> – <%= fmtDate(r.period_end) %></td>
+            <td class="r num <%= r.return_pct < 0 ? 'down' : 'up' %>" style="font-weight: 600"><%= (r.return_pct >= 0 ? '+' : '') + Number(r.return_pct).toFixed(2) %>%</td>
+            <td class="r num"><%= r.positions %></td>
+            <td class="r num"><%= signedMoney(r.total_pnl) %></td>
+            <td class="muted" style="white-space: nowrap"><%= fmtDateTime(r.created_at) %><div style="font-size: 12px"><%= r.posted_name || '' %></div></td>
+            <td class="muted" style="font-size: 12px"><%= r.note || '' %></td>
+            <td class="r"><% if (i === 0) { %><form method="post" action="/admin/plan-results/<%= r.id %>/undo" class="inline" data-confirm="Undo this result? Every investor's profit or loss for this period will be reversed."><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-danger btn-sm" type="submit">Undo</button></form><% } %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %><div class="empty">No results posted yet.</div><% } %>
+  </section>
+
+  <!-- INVESTORS -->
+  <section class="card" id="investors">
+    <div class="card-head"><h2>Investors</h2><span class="muted" style="font-size: 13px">Release early only on a client's documented request; it skips the lock-in.</span></div>
+    <% if (positions.length) { %>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 880px">
+        <thead><tr><th>Client</th><th class="r">Invested</th><th class="r">Current value</th><th class="r">P/L</th><th>Started</th><th>Unlocks</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        <% positions.forEach(function (x) { const pl = x.value - x.principal; %>
+          <tr>
+            <td><a href="/admin/clients/<%= x.user_id %>#plans"><%= x.full_name %></a> <span class="num muted"><%= x.account_no %></span></td>
+            <td class="r num"><%= money(x.principal) %></td>
+            <td class="r num" style="font-weight: 600"><%= money(x.value) %></td>
+            <td class="r num <%= pl < 0 ? 'down' : pl > 0 ? 'up' : '' %>"><%= signedMoney(pl) %></td>
+            <td class="muted"><%= fmtDate(x.started_on) %></td>
+            <td><%= fmtDate(x.unlocks_on) %></td>
+            <td><span class="pill <%= x.status === 'active' ? 'pill-active' : 'pill-neutral' %>"><%= x.status === 'active' ? 'Open' : 'Withdrawn' %></span></td>
+            <td class="r"><% if (x.status === 'active') { %><form method="post" action="/admin/positions/<%= x.id %>/release" class="inline" data-confirm="Release <%= x.full_name %>'s investment to their available balance now?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn-link" type="submit">Release early</button></form><% } %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %><div class="empty">Nobody has invested in this plan yet.</div><% } %>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="card" id="settings">
+    <h2 style="margin-bottom: 14px">Plan settings</h2>
+    <form method="post" action="/admin/plans/<%= plan.id %>/settings">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="form-grid">
+        <div class="field"><label for="s-name">Name</label><input id="s-name" name="name" type="text" required value="<%= plan.name %>"></div>
+        <div class="field"><label for="s-risk">Risk level</label><select id="s-risk" name="risk_level"><% RISKS.forEach(function (r) { %><option <%= plan.risk_level === r ? 'selected' : '' %>><%= r %></option><% }) %></select></div>
+        <div class="field"><label for="s-min">Minimum investment (USD)</label><input id="s-min" name="min_amount" type="text" inputmode="decimal" value="<%= Number(plan.min_amount).toFixed(2) %>"></div>
+        <div class="field"><label for="s-lock">Lock-in (days)</label><input id="s-lock" name="lock_days" type="number" min="0" max="3650" value="<%= plan.lock_days %>"><span class="hint">Applies to new investments only.</span></div>
+        <div class="field" style="grid-column: 1 / -1"><label for="s-sum">Short summary (shown on the plan card)</label><input id="s-sum" name="summary" type="text" value="<%= plan.summary || '' %>"></div>
+        <div class="field" style="grid-column: 1 / -1"><label for="s-desc">Description and risks</label><textarea id="s-desc" name="description"><%= plan.description || '' %></textarea><span class="hint">Describe what the money is used for and how results are measured. Don't promise returns.</span></div>
+      </div>
+      <label class="check"><input type="checkbox" name="active" <%= plan.active ? 'checked' : '' %>> Open to new investment</label>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Save settings</button></div>
+    </form>
+  </section>
+</main>
+<%- include('../partials/foot') %>

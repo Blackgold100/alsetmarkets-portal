@@ -8,7 +8,7 @@
   </div>
 
   <section class="kpis" aria-label="Balances">
-    <div class="card kpi accent"><div class="label">Available to withdraw</div><div class="value num"><%= money(s.available, cur) %></div><div class="sub">Account balance <span class="num"><%= money(s.balance, cur) %></span></div></div>
+    <div class="card kpi accent"><div class="label">Available to withdraw</div><div class="value num"><%= money(s.available, cur) %></div><div class="sub">Account balance <span class="num"><%= money(s.balance, cur) %></span></div><% if (s.inPlans > 0) { %><div class="sub">Not including <span class="num"><%= money(s.inPlans, cur) %></span> in <a href="/plans#my-investments">investment plans</a></div><% } %></div>
     <div class="card kpi"><div class="label">Withdrawals in progress</div><div class="value num"><%= money(s.pendingWithdrawals, cur) %></div><div class="sub">Reserved until paid</div></div>
     <div class="card kpi"><div class="label">Verified wallets</div><div class="value num"><%= approved.length %></div><div class="sub"><%= wallets.filter(function (w) { return w.status === 'pending'; }).length %> awaiting verification</div></div>
   </section>

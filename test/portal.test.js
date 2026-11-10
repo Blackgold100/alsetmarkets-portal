@@ -67,6 +67,11 @@ async function waitForServer() {
 async function cleanup(walletIds) {
   if (walletIds.length) await db.query('DELETE FROM firm_wallets WHERE id = ANY($1)', [walletIds]);
   await db.query("DELETE FROM users WHERE email LIKE $1", [`%-${RUN}@example.test`]);
+  // The temporary test plan and anything attached to it
+  await db.query("DELETE FROM transactions WHERE plan_id IN (SELECT id FROM plans WHERE slug=$1)", [`test-${RUN}`]);
+  await db.query("DELETE FROM plan_positions WHERE plan_id IN (SELECT id FROM plans WHERE slug=$1)", [`test-${RUN}`]);
+  await db.query("DELETE FROM plan_results WHERE plan_id IN (SELECT id FROM plans WHERE slug=$1)", [`test-${RUN}`]);
+  await db.query("DELETE FROM plans WHERE slug=$1", [`test-${RUN}`]);
 }
 
 (async () => {
@@ -169,6 +174,54 @@ async function cleanup(walletIds) {
     await a.post('/admin', `/admin/transactions/${wd.id}/status`, { status: 'completed', back: 'dashboard', tx_hash: H2 });
     r = await c.req('/funds/withdraw');
     check(r.text.includes('tronscan.org/#/transaction/' + H2), 'client sees the payout on the block explorer');
+
+    console.log('\nInvestment plans');
+    // Balance here: 10,000 + 500 − 1,000 − 800 + 300 = 9,000, all available
+    const { rows: [tp] } = await db.query(
+      `INSERT INTO plans (slug,name,summary,risk_level,min_amount,lock_days,sort) VALUES ($1,$2,'Test plan','High',250,7,99) RETURNING *`,
+      [`test-${RUN}`, `Test Plan ${RUN}`]);
+    r = await c.req('/plans');
+    check(r.status === 200 && r.text.includes(`Test Plan ${RUN}`) && r.text.includes('Mining') && r.text.includes('Crypto Trading'), 'plans page lists Mining, Stocks, Crypto Trading');
+    await c.post('/plans', `/plans/${tp.id}/invest`, { amount: '100', password: 'ClientTest2026', accept: 'on' });
+    check((await c.flash('/plans')) === 'error', 'investment below the plan minimum is refused');
+    await c.post('/plans', `/plans/${tp.id}/invest`, { amount: '2000', password: 'ClientTest2026' });
+    check((await c.flash('/plans')) === 'error', 'investing requires accepting the risk and lock-in terms');
+    await c.post('/plans', `/plans/${tp.id}/invest`, { amount: '2000', password: 'wrong', accept: 'on' });
+    check((await c.flash('/plans')) === 'error', 'investing requires the correct password');
+    await c.post('/plans', `/plans/${tp.id}/invest`, { amount: '2000', password: 'ClientTest2026', accept: 'on' });
+    check((await c.flash('/plans')) === 'success', 'client invests $2,000');
+    const { rows: [pos] } = await db.query('SELECT * FROM plan_positions WHERE user_id=$1 AND plan_id=$2', [id, tp.id]);
+    const daysLocked = Math.round((Date.parse(pos.unlocks_on) - Date.parse(pos.started_on)) / 864e5);
+    check(pos && daysLocked === 7, 'investment is locked for the plan’s 7 days');
+    r = await c.req('/');
+    check(r.text.includes('$9,000.00') && r.text.includes('$7,000.00'), 'balance stays $9,000.00; available drops to $7,000.00');
+    await c.post('/plans', `/plans/${tp.id}/invest`, { amount: '8000', password: 'ClientTest2026', accept: 'on' });
+    check((await c.flash('/plans')) === 'error', 'cannot invest more than the available balance');
+    await c.post('/plans', `/plans/positions/${pos.id}/redeem`, {});
+    check((await c.flash('/plans')) === 'error', 'cannot withdraw from a plan before the lock-in ends');
+    const day = new Date().toISOString().slice(0, 10);
+    r = await a.post(`/admin/plans/${tp.id}`, `/admin/plans/${tp.id}/preview`, { period_start: day, period_end: day, return_pct: '45' });
+    check(r.text.includes('safety check'), 'implausible results (over ±30%) are refused');
+    r = await a.post(`/admin/plans/${tp.id}`, `/admin/plans/${tp.id}/preview`, { period_start: day, period_end: day, return_pct: '2' });
+    check(r.status === 200 && r.text.includes('+$40.00'), 'preview shows +$40.00 for a +2% result on $2,000');
+    await a.post(`/admin/plans/${tp.id}`, `/admin/plans/${tp.id}/results`, { period_start: day, period_end: day, return_pct: '2', confirm: 'yes' });
+    r = await c.req('/');
+    check(r.text.includes('$9,040.00') && r.text.includes('$2,040.00'), 'posting +2% credits $40: balance $9,040.00, plan value $2,040.00');
+    await a.post(`/admin/plans/${tp.id}`, `/admin/plans/${tp.id}/results`, { period_start: day, period_end: day, return_pct: '2', confirm: 'yes' });
+    check((await a.flash(`/admin/plans/${tp.id}`)) === 'error', 'the same period cannot be posted twice');
+    const { rows: [res1] } = await db.query('SELECT id FROM plan_results WHERE plan_id=$1', [tp.id]);
+    await a.post(`/admin/plans/${tp.id}`, `/admin/plan-results/${res1.id}/undo`, {});
+    r = await c.req('/');
+    check(r.text.includes('$9,000.00') && !r.text.includes('$2,040.00'), 'undo reverses the result for every investor');
+    await a.post(`/admin/plans/${tp.id}`, `/admin/plans/${tp.id}/results`, { period_start: day, period_end: day, return_pct: '-1.5', confirm: 'yes' });
+    r = await c.req('/');
+    check(r.text.includes('$8,970.00') && r.text.includes('$1,970.00'), 'a −1.5% result debits $30: balance $8,970.00, plan value $1,970.00');
+    r = await c.req('/transactions');
+    check(r.text.includes(`Test Plan ${RUN} plan · result`), 'the plan result appears in the client’s transaction history');
+    await a.post(`/admin/plans/${tp.id}`, `/admin/positions/${pos.id}/release`, {});
+    r = await c.req('/funds/withdraw');
+    check(r.text.includes('$8,970.00') && !r.text.includes('Not including'), 'released investment returns to available ($8,970.00)');
+    for (const p of ['/admin/plans', `/admin/plans/${tp.id}`, `/admin/clients/${id}`]) { r = await a.req(p); check(r.status === 200, `admin page ${p} loads`); }
 
     console.log('\nLive support chat');
     r = await c.json('GET', '/chat/api/messages');

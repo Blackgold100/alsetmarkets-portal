@@ -152,3 +152,68 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS chat_messages_thread ON chat_messages(thread_id, id);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+
+-- ---------- Investment plans ----------
+-- Returns are posted by an admin from each plan's ACTUAL results, then distributed
+-- pro-rata to every open position. Nothing is credited on a fixed schedule.
+CREATE TABLE IF NOT EXISTS plans (
+  id          SERIAL PRIMARY KEY,
+  slug        TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  summary     TEXT,
+  description TEXT,
+  risk_level  TEXT NOT NULL DEFAULT 'Medium',
+  min_amount  NUMERIC(16,2) NOT NULL DEFAULT 100,
+  lock_days   INTEGER NOT NULL DEFAULT 30 CHECK (lock_days >= 0 AND lock_days <= 3650),
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  sort        INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS plan_positions (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id     INTEGER NOT NULL REFERENCES plans(id),
+  principal   NUMERIC(16,2) NOT NULL CHECK (principal > 0),
+  value       NUMERIC(16,2) NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')),
+  started_on  DATE NOT NULL DEFAULT CURRENT_DATE,
+  unlocks_on  DATE NOT NULL,
+  closed_at   TIMESTAMPTZ,
+  closed_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS plan_positions_user ON plan_positions(user_id, status);
+CREATE INDEX IF NOT EXISTS plan_positions_plan ON plan_positions(plan_id, status);
+
+CREATE TABLE IF NOT EXISTS plan_results (
+  id           SERIAL PRIMARY KEY,
+  plan_id      INTEGER NOT NULL REFERENCES plans(id),
+  period_start DATE NOT NULL,
+  period_end   DATE NOT NULL CHECK (period_end >= period_start),
+  return_pct   NUMERIC(8,4) NOT NULL,
+  note         TEXT,
+  positions    INTEGER NOT NULL DEFAULT 0,
+  total_pnl    NUMERIC(16,2) NOT NULL DEFAULT 0,
+  posted_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (plan_id, period_start)
+);
+
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS plan_id        INTEGER REFERENCES plans(id);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS position_id    INTEGER REFERENCES plan_positions(id) ON DELETE SET NULL;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS plan_result_id INTEGER REFERENCES plan_results(id) ON DELETE CASCADE;
+CREATE UNIQUE INDEX IF NOT EXISTS transactions_result_position ON transactions(plan_result_id, position_id) WHERE plan_result_id IS NOT NULL;
+
+-- Default plans (only inserted once; edit them from Admin → Plans)
+INSERT INTO plans (slug, name, summary, description, risk_level, min_amount, lock_days, sort) VALUES
+ ('mining', 'Mining', 'Pooled exposure to cryptocurrency mining operations.',
+  'Capital is allocated to cryptocurrency mining capacity. Weekly results depend on coin prices, network difficulty, equipment uptime and energy costs, and can be negative.',
+  'High', 500, 90, 1),
+ ('stocks', 'Stocks', 'A managed portfolio of listed equities.',
+  'Capital is invested in a diversified basket of listed company shares and equity funds. Weekly results follow market movements, dividends and trading costs, and can be negative.',
+  'Medium', 250, 30, 2),
+ ('crypto-trading', 'Crypto Trading', 'Active trading of major cryptocurrencies.',
+  'Capital is actively traded across major cryptocurrency pairs. Results are highly volatile: weeks with large gains or losses are both possible.',
+  'High', 250, 30, 3)
+ON CONFLICT (slug) DO NOTHING;

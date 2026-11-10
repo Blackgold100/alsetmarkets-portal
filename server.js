@@ -103,6 +103,8 @@ app.use((req, res, next) => {
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
 app.use(require('./src/routes/auth'));
 app.use('/admin', require('./src/routes/admin'));
+app.use('/admin', require('./src/routes/plans').admin);
+app.use('/plans', require('./src/routes/plans').client);
 app.use('/chat', require('./src/routes/chat').client);
 app.use('/admin/chat', require('./src/routes/chat').admin);
 app.use(require('./src/routes/client'));

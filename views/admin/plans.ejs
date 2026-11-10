@@ -1,0 +1,35 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div><h1>Investment plans</h1><p>Post each plan's actual weekly result. The portal then credits or debits every investor in that plan automatically, in proportion to their investment.</p></div></div>
+
+  <% const due = plans.filter(function (p) { return p.resultDue; }); %>
+  <% if (due.length) { %>
+  <div class="alert alert-warning" role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    <span><strong>Weekly result due</strong><%= due.map(function (p) { return p.name; }).join(', ') %>: no result posted in the last 7 days.</span>
+  </div>
+  <% } %>
+
+  <section class="plan-grid" aria-label="Plans">
+    <% plans.forEach(function (p) { %>
+    <article class="card stack">
+      <div class="plan-head">
+        <div><h2 style="font-size: 20px"><%= p.name %></h2><p class="muted" style="margin: 4px 0 0"><%= p.summary %></p></div>
+        <span class="pill <%= p.active ? 'pill-active' : 'pill-neutral' %>"><%= p.active ? 'Open to new investment' : 'Closed to new investment' %></span>
+      </div>
+      <dl class="plan-facts">
+        <div><dt>Invested now</dt><dd class="num"><%= money(p.aum, 'USD', 0) %></dd></div>
+        <div><dt>Investors</dt><dd class="num"><%= p.investors %></dd></div>
+        <div><dt>Last result to</dt><dd><%= p.last_period_end ? fmtDate(p.last_period_end) : '—' %></dd></div>
+      </dl>
+      <%- include('../partials/plan-bars', { results: p.recent }) %>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+        <a class="btn <%= p.resultDue ? 'btn-gold' : 'btn-primary' %>" href="/admin/plans/<%= p.id %>#post"><%= p.resultDue ? 'Post this week’s result' : 'Post a result' %></a>
+        <a class="btn btn-outline" href="/admin/plans/<%= p.id %>">Manage</a>
+      </div>
+    </article>
+    <% }) %>
+  </section>
+</main>
+<%- include('../partials/foot') %>

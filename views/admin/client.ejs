@@ -18,7 +18,7 @@
   </div>
 
   <nav class="tabs-anchor" aria-label="Sections">
-    <a href="#transactions">Transactions</a><a href="#wallets">Crypto wallets</a><a href="#profile">Profile &amp; status</a><a href="#upgrade">Upgrade notice</a>
+    <a href="#transactions">Transactions</a><a href="#plans">Plans</a><a href="#wallets">Crypto wallets</a><a href="#profile">Profile &amp; status</a><a href="#upgrade">Upgrade notice</a>
     <a href="#holdings">Holdings</a><a href="#documents">Documents</a><a href="#notices">Notices</a><a href="#security">Security</a><a href="#activity">Activity</a>
   </nav>
 
@@ -103,6 +103,32 @@
       </div>
     <% }) %>
     <details class="box" style="margin-top: 10px"><summary>Add a personal deposit address</summary><%- include('../partials/firm-wallet-form', { userId: client.id }) %></details>
+  </section>
+
+  <!-- PLANS -->
+  <section class="card" id="plans">
+    <div class="card-head"><h2>Investment plans</h2><span class="muted" style="font-size: 13px">In plans: <span class="num"><%= money(s.inPlans, cur) %></span> · results are posted from <a href="/admin/plans">Plans</a></span></div>
+    <% if (positions.length) { %>
+    <div class="table-wrap">
+      <table class="data" style="min-width: 800px">
+        <thead><tr><th>Plan</th><th class="r">Invested</th><th class="r">Current value</th><th class="r">P/L</th><th>Started</th><th>Unlocks</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        <% positions.forEach(function (x) { const pl = x.value - x.principal; %>
+          <tr>
+            <td style="font-weight: 600"><a href="/admin/plans/<%= x.plan_id %>"><%= x.plan_name %></a></td>
+            <td class="r num"><%= money(x.principal, cur) %></td>
+            <td class="r num"><%= money(x.value, cur) %></td>
+            <td class="r num <%= pl < 0 ? 'down' : pl > 0 ? 'up' : '' %>"><%= signedMoney(pl, cur) %></td>
+            <td class="muted"><%= fmtDate(x.started_on) %></td>
+            <td><%= fmtDate(x.unlocks_on) %></td>
+            <td><span class="pill <%= x.status === 'active' ? 'pill-active' : 'pill-neutral' %>"><%= x.status === 'active' ? 'Open' : 'Withdrawn' %></span></td>
+            <td class="r"><% if (x.status === 'active') { %><form method="post" action="/admin/positions/<%= x.id %>/release" class="inline" data-confirm="Release this investment to the client's available balance now?"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="back" value="client"><button class="btn-link" type="submit">Release early</button></form><% } %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } else { %><p class="muted" style="margin: 0">This client hasn't invested in a plan.</p><% } %>
   </section>
 
   <div class="row" style="align-items: flex-start">

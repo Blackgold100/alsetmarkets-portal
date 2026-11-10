@@ -299,3 +299,17 @@ code.addr { flex: 1 1 auto; min-width: 0; background: #F2F4F7; border: 1px solid
 }
 @media print { .chat-widget { display: none; } }
 body:has(.chat-widget) .page { padding-bottom: 104px; }
+
+/* ---------- Investment plans ---------- */
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.plan-card { display: flex; flex-direction: column; gap: 16px; border-top: 3px solid var(--gold); }
+.plan-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.plan-facts { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.plan-facts div { background: #F8F9FB; border-radius: 8px; padding: 10px; }
+.plan-facts dt { font-size: 12px; color: #475467; }
+.plan-facts dd { margin: 2px 0 0; font-weight: 600; }
+.plan-bars { display: block; }
+.plan-bars-empty { height: 56px; display: flex; align-items: center; justify-content: center; background: #F8F9FB; border-radius: 8px; color: var(--muted); font-size: 13px; }
+.plan-form { border-top: 1px solid var(--line-2); padding-top: 14px; }
+.plan-form .btn[disabled] { opacity: .55; cursor: not-allowed; }
+.preview-box { margin-top: 18px; background: #FBF8EE; border: 1px solid #EBDDAA; border-radius: 10px; padding: 16px; }

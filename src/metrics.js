@@ -1,4 +1,5 @@
 const { query } = require('./db');
+const plans = require('./plans');
 
 const RANGES = ['1M', '3M', '6M', 'YTD', '1Y', 'ALL'];
 const ALLOC_COLORS = ['#2F6BFF', '#C98A12', '#00968A', '#8B5CF6', '#D6408F', '#64748B'];
@@ -31,7 +32,7 @@ async function loadAccount(userId) {
   return { transactions: tx.rows, holdings: hold.rows, documents: docs.rows, notices: notices.rows };
 }
 
-function summarize(transactions) {
+function summarize(transactions, inPlans = 0) {
   const done = transactions.filter((t) => t.status === 'completed');
   const sum = (type) => done.filter((t) => t.type === type).reduce((a, t) => a + t.amount, 0);
   const deposits = sum('deposit');
@@ -44,7 +45,7 @@ function summarize(transactions) {
   const balance = invested + roi;
   const pendingWithdrawals = transactions.filter((t) => t.status === 'pending' && t.type === 'withdrawal').reduce((a, t) => a + t.amount, 0);
   const pendingDeposits = transactions.filter((t) => t.status === 'pending' && t.type === 'deposit').reduce((a, t) => a + t.amount, 0);
-  const available = Math.max(0, balance - pendingWithdrawals);
+  const available = Math.max(0, Math.round((balance - pendingWithdrawals - inPlans) * 100) / 100);
 
   // Monthly P/L (profit - loss - fees), and return vs balance at the start of each month
   const months = new Map();
@@ -70,7 +71,7 @@ function summarize(transactions) {
   const thisMonth = months.get(thisKey);
 
   return {
-    deposits, withdrawals, profit, loss, fees, invested, roi, balance, available,
+    deposits, withdrawals, profit, loss, fees, invested, roi, balance, available, inPlans,
     pendingWithdrawals, pendingDeposits,
     roiPct: invested > 0 ? roi / invested : null,
     monthly: monthly.slice(-12).reverse(),
@@ -207,7 +208,9 @@ function allocation(holdings) {
 async function dashboardData(user, range) {
   const r = RANGES.includes(range) ? range : '1Y';
   const acc = await loadAccount(user.id);
-  const summary = summarize(acc.transactions);
+  const positions = await plans.userPositions(user.id);
+  const inPlans = positions.filter((p) => p.status === 'active').reduce((a, p) => a + p.value, 0);
+  const summary = summarize(acc.transactions, inPlans);
   return {
     ...acc,
     summary,
@@ -215,6 +218,7 @@ async function dashboardData(user, range) {
     range: r,
     ranges: RANGES,
     alloc: allocation(acc.holdings),
+    positions,
   };
 }
 

@@ -1,0 +1,18 @@
+<%
+  // Weekly results as bars around a zero line. Expects `results` (oldest first).
+  const W = 240, H = 56, mid = H / 2, n = Math.max(results.length, 1), gap = 3;
+  const bw = Math.max(4, (W - gap * (n - 1)) / n);
+  const maxAbs = Math.max(1, ...results.map(function (r) { return Math.abs(r.return_pct); }));
+%>
+<% if (results.length) { %>
+<svg class="plan-bars" viewBox="0 0 <%= W %> <%= H %>" width="100%" height="<%= H %>" role="img" aria-label="Last <%= results.length %> posted results: <%= results.map(function (r) { return (r.return_pct >= 0 ? '+' : '') + Number(r.return_pct).toFixed(2) + '%'; }).join(', ') %>">
+  <line x1="0" x2="<%= W %>" y1="<%= mid %>" y2="<%= mid %>" stroke="#D0D5DD" stroke-width="1"/>
+  <% results.forEach(function (r, i) {
+       const hgt = Math.max(1.5, (Math.abs(r.return_pct) / maxAbs) * (mid - 3));
+       const x = i * (bw + gap), y = r.return_pct >= 0 ? mid - hgt : mid; %>
+    <rect x="<%= x.toFixed(1) %>" y="<%= y.toFixed(1) %>" width="<%= bw.toFixed(1) %>" height="<%= hgt.toFixed(1) %>" rx="2" fill="<%= r.return_pct >= 0 ? '#2F6BFF' : '#C2410C' %>"><title><%= fmtDate(r.period_start) %> to <%= fmtDate(r.period_end) %>: <%= (r.return_pct >= 0 ? '+' : '') + Number(r.return_pct).toFixed(2) %>%</title></rect>
+  <% }) %>
+</svg>
+<% } else { %>
+<div class="plan-bars-empty">No results posted yet</div>
+<% } %>

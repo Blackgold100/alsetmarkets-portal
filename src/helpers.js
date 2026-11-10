@@ -38,7 +38,7 @@ function csrf(req, res, next) {
   if (!req.session.csrf) req.session.csrf = crypto.randomBytes(24).toString('hex');
   res.locals.csrf = req.session.csrf;
   if (req.method === 'POST') {
-    const token = req.body && req.body._csrf;
+    const token = (req.body && req.body._csrf) || req.get('x-csrf-token');
     if (!token || token.length !== req.session.csrf.length ||
         !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(req.session.csrf))) {
       return res.status(403).render('error', { title: 'Session expired', message: 'Your form session expired. Go back, refresh the page and try again.' });

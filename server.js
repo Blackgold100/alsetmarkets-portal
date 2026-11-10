@@ -39,6 +39,7 @@ app.use(helmet({
 }));
 app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: PROD ? '7d' : 0 }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+app.use(express.json({ limit: '16kb' }));
 
 app.use(session({
   store: new PgStore({ pool, createTableIfMissing: true }),
@@ -49,6 +50,18 @@ app.use(session({
   rolling: true,
   cookie: { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 30 * 60 * 1000 }, // 30 min idle timeout
 }));
+
+// express-session can send a redirect before the session has finished saving to the
+// database, so the browser's next request occasionally arrives without its login or
+// flash message. Save the session first, then redirect.
+app.use((req, res, next) => {
+  const redirect = res.redirect.bind(res);
+  res.redirect = (...args) => {
+    if (req.session && typeof req.session.save === 'function') req.session.save(() => redirect(...args));
+    else redirect(...args);
+  };
+  next();
+});
 
 // View helpers
 app.locals.money = h.money;
@@ -88,6 +101,8 @@ app.use((req, res, next) => {
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
 app.use(require('./src/routes/auth'));
 app.use('/admin', require('./src/routes/admin'));
+app.use('/chat', require('./src/routes/chat').client);
+app.use('/admin/chat', require('./src/routes/chat').admin);
 app.use(require('./src/routes/client'));
 app.use('/funds', require('./src/routes/funds'));
 

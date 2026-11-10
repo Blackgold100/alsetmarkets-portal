@@ -127,3 +127,28 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS wallet_address TEXT;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS wallet_memo  TEXT;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tx_hash      TEXT;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS client_requested BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ---------- Live support chat ----------
+-- One conversation per client; admins reply from the Support inbox.
+CREATE TABLE IF NOT EXISTS chat_threads (
+  id              SERIAL PRIMARY KEY,
+  user_id         INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  status          TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+  assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_threads_last ON chat_threads(last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id          SERIAL PRIMARY KEY,
+  thread_id   INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+  sender_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  sender_role TEXT NOT NULL CHECK (sender_role IN ('client','admin','system')),
+  body        TEXT NOT NULL,
+  read_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS chat_messages_thread ON chat_messages(thread_id, id);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;

@@ -44,6 +44,14 @@ function agent() {
     },
     async csrf(p) { const r = await this.req(p); const m = r.text.match(/name="_csrf" value="([^"]+)"/); return m && m[1]; },
     async post(page, action, form) { const t = await this.csrf(page); return this.req(action, { method: 'POST', form: { _csrf: t, ...form } }); },
+    async json(method, p, body) {
+      if (!this.token) { const page = await this.req('/'.concat(p.startsWith('/admin') ? 'admin' : '')); this.token = (page.text.match(/name="csrf-token" content="([^"]+)"/) || [])[1]; }
+      const headers = { cookie: Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; '), accept: 'application/json', 'x-csrf-token': this.token || '' };
+      if (body) headers['content-type'] = 'application/json';
+      const r = await fetch(B + p, { method, headers, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
+      let data = null; try { data = await r.json(); } catch (e) { /* not JSON */ }
+      return { status: r.status, data };
+    },
     async flash(p) { const r = await this.req(p); const m = r.text.match(/class="alert alert-(success|error)"[^>]*>[\s\S]*?<span>([^<]*)</); return m ? m[1] : null; },
   };
 }
@@ -161,6 +169,40 @@ async function cleanup(walletIds) {
     await a.post('/admin', `/admin/transactions/${wd.id}/status`, { status: 'completed', back: 'dashboard', tx_hash: H2 });
     r = await c.req('/funds/withdraw');
     check(r.text.includes('tronscan.org/#/transaction/' + H2), 'client sees the payout on the block explorer');
+
+    console.log('\nLive support chat');
+    r = await c.json('GET', '/chat/api/messages');
+    check(r.status === 200 && r.data.status === 'new', 'client starts with no conversation');
+    r = await fetch(B + '/chat/api/messages', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body: 'hi' }) });
+    check(r.status === 401 || r.status === 403, 'chat API refuses requests without a session or CSRF token');
+    r = await c.json('POST', '/chat/api/messages', { body: 'Hello, when will my deposit be credited? <script>alert(1)</script>' });
+    check(r.status === 200 && r.data.message.role === 'client', 'client sends a message');
+    r = await c.json('POST', '/chat/api/messages', { body: '   ' });
+    check(r.status === 400, 'empty messages are refused');
+    r = await a.json('GET', '/admin/chat/api/summary');
+    check(r.status === 200 && r.data.unread >= 1, 'admin sees an unread message count');
+    r = await a.json('GET', '/admin/chat/api/threads');
+    const thread = r.data.threads.find((t) => t.account && t.name === 'Test Client');
+    check(thread && thread.unread >= 1 && thread.waiting, 'conversation appears in the admin inbox as awaiting reply');
+    r = await a.req(`/admin/chat/${thread.id}`);
+    check(r.status === 200 && !r.text.includes('<script>alert(1)</script>'), 'admin conversation page loads and message HTML is escaped');
+    r = await a.json('POST', `/admin/chat/api/threads/${thread.id}/messages`, { body: 'It is confirming now and will be credited within 30 minutes.' });
+    check(r.status === 200 && r.data.message.role === 'admin', 'admin replies');
+    r = await c.json('GET', '/chat/api/messages');
+    check(r.data.messages.some((m) => m.role === 'admin') && r.data.unread >= 1, 'client receives the reply with an unread badge');
+    check(r.data.online === true, 'client sees support as online');
+    await c.json('POST', '/chat/api/read');
+    r = await c.json('GET', '/chat/api/messages');
+    check(r.data.unread === 0, 'opening the chat marks replies as read');
+    const lastId = r.data.messages[r.data.messages.length - 1].id;
+    r = await c.json('GET', `/chat/api/messages?after=${lastId}`);
+    check(r.data.messages.length === 0, 'polling returns only new messages');
+    r = await c.json('GET', '/admin/chat/api/summary');
+    check(r.status === 403, 'clients cannot use the admin chat API');
+    await a.post(`/admin/chat/${thread.id}`, `/admin/chat/${thread.id}/status`, { status: 'closed' });
+    await c.json('POST', '/chat/api/messages', { body: 'One more question' });
+    r = await a.json('GET', '/admin/chat/api/threads?filter=open');
+    check(r.data.threads.some((t) => t.id === thread.id), 'a closed conversation reopens when the client writes again');
   } catch (e) {
     failed++;
     console.error('\nTest run crashed:', e.message);

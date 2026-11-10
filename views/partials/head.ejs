@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<meta name="csrf-token" content="<%= csrf %>">
 <title><%= typeof title !== 'undefined' ? title + ' · ' : '' %><%= brand.name %> Client Portal</title>
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,6 +25,7 @@
       <% if (user.role === 'admin') { %>
         <a href="/admin" class="<%= (path === '/admin' || path === '/admin/' || path.startsWith('/admin/clients/') || path.startsWith('/admin/transactions')) && path !== '/admin/clients/new' ? 'active' : '' %>">Clients</a>
         <a href="/admin/clients/new" class="<%= path === '/admin/clients/new' ? 'active' : '' %>">Add client</a>
+        <a href="/admin/chat" class="<%= path.startsWith('/admin/chat') ? 'active' : '' %>">Support chat <span class="nav-badge" data-support-badge hidden></span></a>
         <a href="/admin/wallets" class="<%= path.startsWith('/admin/wallets') ? 'active' : '' %>">Wallets</a>
         <a href="/admin/notices" class="<%= path.startsWith('/admin/notices') ? 'active' : '' %>">Announcements</a>
         <a href="/admin/team" class="<%= path.startsWith('/admin/team') ? 'active' : '' %>">Team</a>

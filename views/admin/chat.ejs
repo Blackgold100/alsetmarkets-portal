@@ -1,0 +1,79 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head">
+    <div><h1>Support chat</h1><p>Client conversations update live. Replies appear on the client's screen within a few seconds.</p></div>
+    <button type="button" class="btn btn-outline" data-enable-notify hidden>Turn on desktop alerts</button>
+  </div>
+
+  <div class="inbox" data-inbox data-filter="<%= filter %>" data-active="<%= thread ? thread.id : '' %>">
+    <aside class="card inbox-list" aria-label="Conversations">
+      <nav class="seg" aria-label="Filter conversations" style="margin-bottom: 12px">
+        <% ['open', 'closed', 'all'].forEach(function (f) { %>
+          <a href="/admin/chat<%= thread ? '/' + thread.id : '' %>?filter=<%= f %>" aria-current="<%= filter === f ? 'true' : 'false' %>"><%= titleCase(f) %></a>
+        <% }) %>
+      </nav>
+      <div data-thread-list>
+        <% if (!threads.length) { %><div class="empty">No <%= filter === 'all' ? '' : filter %> conversations.</div><% } %>
+        <% threads.forEach(function (t) { %>
+          <a class="thread-item<%= thread && thread.id === t.id ? ' active' : '' %>" href="/admin/chat/<%= t.id %>?filter=<%= filter %>">
+            <span class="thread-top"><strong><%= t.name %></strong><span class="muted" style="font-size: 12px"><%= fmtDateTime(t.lastAt).replace(' UTC', '') %></span></span>
+            <span class="thread-preview"><%= t.lastRole === 'admin' ? 'You: ' : '' %><%= t.lastBody %></span>
+            <span class="thread-meta"><span class="num muted"><%= t.account %></span>
+              <% if (t.unread) { %><span class="pill pill-pending"><%= t.unread %> new</span><% } else if (t.waiting) { %><span class="pill pill-pending">Awaiting reply</span><% } %>
+              <% if (t.status === 'closed') { %><span class="pill pill-neutral">Closed</span><% } %></span>
+          </a>
+        <% }) %>
+      </div>
+    </aside>
+
+    <% if (thread) { %>
+    <section class="card inbox-convo" aria-label="Conversation with <%= thread.name %>">
+      <header class="convo-head">
+        <div>
+          <h2><%= thread.name %></h2>
+          <div class="muted" style="font-size: 13px"><span class="num"><%= thread.account %></span> · <%= thread.tier %><%= thread.assigned ? ' · Assigned to ' + thread.assigned : '' %></div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <% if (!thread.assigned) { %>
+          <form method="post" action="/admin/chat/<%= thread.id %>/assign" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline btn-sm" type="submit">Assign to me</button></form>
+          <% } %>
+          <form method="post" action="/admin/chat/<%= thread.id %>/status" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="status" value="<%= thread.status === 'open' ? 'closed' : 'open' %>">
+            <button class="btn btn-outline btn-sm" type="submit"><%= thread.status === 'open' ? 'Close conversation' : 'Reopen' %></button>
+          </form>
+        </div>
+      </header>
+      <div class="chat-log convo-log" data-admin-log data-thread="<%= thread.id %>" role="log" aria-live="polite"></div>
+      <div class="quick-replies" aria-label="Quick replies">
+        <% quickReplies.forEach(function (q) { %><button type="button" class="chip quick" data-quick="<%= q %>"><%= q.length > 48 ? q.slice(0, 46) + '…' : q %></button><% }) %>
+      </div>
+      <form class="chat-form" data-admin-form>
+        <label class="sr-only" for="reply">Reply</label>
+        <textarea id="reply" data-admin-input rows="2" maxlength="2000" placeholder="Write a reply… (Enter to send, Shift+Enter for a new line)" required></textarea>
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+    </section>
+
+    <aside class="card inbox-side stack" aria-label="Client summary">
+      <h2>Client</h2>
+      <dl class="facts">
+        <dt>Status</dt><dd><span class="pill pill-<%= clientUser.status %>"><%= titleCase(clientUser.status) %></span></dd>
+        <dt>KYC</dt><dd><span class="pill pill-<%= clientUser.kyc_status %>"><%= titleCase(clientUser.kyc_status) %></span></dd>
+        <dt>Balance</dt><dd class="num"><%= money(summary.balance, clientUser.base_currency) %></dd>
+        <dt>Invested</dt><dd class="num"><%= money(summary.invested, clientUser.base_currency) %></dd>
+        <dt>ROI</dt><dd class="num <%= summary.roi < 0 ? 'down' : 'up' %>"><%= signedMoney(summary.roi, clientUser.base_currency) %></dd>
+        <dt>Pending in</dt><dd class="num"><%= money(summary.pendingDeposits, clientUser.base_currency) %></dd>
+        <dt>Pending out</dt><dd class="num"><%= money(summary.pendingWithdrawals, clientUser.base_currency) %></dd>
+        <dt>Email</dt><dd><%= clientUser.email %></dd>
+        <dt>Phone</dt><dd><%= clientUser.phone || '—' %></dd>
+      </dl>
+      <a class="btn btn-outline" href="/admin/clients/<%= clientUser.id %>">Open client record</a>
+      <p class="muted" style="font-size: 12px; margin: 0">Before discussing account details, confirm you are speaking to the account holder. Never ask for passwords or seed phrases.</p>
+    </aside>
+    <% } else { %>
+    <section class="card inbox-convo inbox-empty"><div class="empty">Choose a conversation on the left.<br>New messages appear here automatically.</div></section>
+    <% } %>
+  </div>
+</main>
+<%- include('../partials/foot') %>

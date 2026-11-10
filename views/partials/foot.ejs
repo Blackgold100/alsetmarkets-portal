@@ -1,3 +1,5 @@
+<% if (user && user.role === 'client' && !user.must_change_password && !(typeof preview !== 'undefined' && preview)) { %><%- include('chat-widget') %><% } %>
 <script src="/static/chart.js"></script>
+<% if (user && !user.must_change_password) { %><script src="/static/chat.js"></script><% } %>
 </body>
 </html>

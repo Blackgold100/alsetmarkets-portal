@@ -27,6 +27,7 @@ client.get('/', wrap(async (req, res) => {
   const inPlans = positions.filter((p) => p.status === 'active').reduce((a, p) => a + p.value, 0);
   const U = require('../upgrades');
   const [limit, { offers }] = await Promise.all([U.planLimitFor(req.user), U.offersFor(req.user)]);
+  for (const p of plans) p.eligible = await U.meetsTier(req.user, p.min_tier);
   res.render('client/plans', { title: 'Investment plans', plans, positions, summary: summarize(txs, inPlans), limit, nextTier: offers[0] || null });
 }));
 
@@ -41,6 +42,10 @@ client.post('/:id/invest', limiter, wrap(async (req, res) => {
   if (req.body.accept !== 'on') { h.flash(req, 'error', 'Please confirm you understand the risks and the lock-in period.'); return res.redirect(back); }
   if (!(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) { h.flash(req, 'error', 'Your password was incorrect. Nothing was invested.'); return res.redirect(back); }
   const r = await P.invest({ user: u, plan, amount, summarize });
+  if (r.error === 'tier_required') {
+    h.flash(req, 'error', `The ${plan.name} plan is available from the ${r.minTier} tier. Upgrade your account to invest in it.`);
+    return res.redirect(back);
+  }
   if (r.error === 'tier_limit') {
     const l = r.limit;
     h.flash(req, 'error', l.remaining > 0
@@ -80,8 +85,9 @@ async function planPage(req, res, plan, extra = {}) {
   ]);
   const stats = all.find((p) => p.id === plan.id);
   const lastEnd = results.length ? results[0].period_end : null;
+  const tierNames = (await require('../upgrades').allTiers()).map((t) => t.name);
   res.render('admin/plan', {
-    title: `${plan.name} plan`, plan, stats, results, positions, RISKS, adminArea: true,
+    title: `${plan.name} plan`, plan, stats, results, positions, RISKS, adminArea: true, tierNames,
     suggest: P.nextPeriod(lastEnd), preview: null, form: {}, maxPct: P.MAX_WEEKLY_PCT, today: P.today(), ...extra,
   });
 }
@@ -100,9 +106,10 @@ admin.post('/plans/:id/settings', wrap(async (req, res) => {
     name: h.str(b.name, 60) || plan.name, summary: h.optStr(b.summary, 200), description: h.optStr(b.description, 2000),
     risk_level: h.oneOf(b.risk_level, RISKS, plan.risk_level), min_amount: h.nonNeg(b.min_amount) ?? plan.min_amount,
     lock_days: Math.max(0, Math.min(3650, parseInt(b.lock_days, 10) || 0)), active: b.active === 'on',
+    min_tier: (await require('../upgrades').allTiers()).some((t) => t.name === b.min_tier) ? b.min_tier : null,
   };
-  await query('UPDATE plans SET name=$1, summary=$2, description=$3, risk_level=$4, min_amount=$5, lock_days=$6, active=$7 WHERE id=$8',
-    [v.name, v.summary, v.description, v.risk_level, v.min_amount, v.lock_days, v.active, plan.id]);
+  await query('UPDATE plans SET name=$1, summary=$2, description=$3, risk_level=$4, min_amount=$5, lock_days=$6, active=$7, min_tier=$8 WHERE id=$9',
+    [v.name, v.summary, v.description, v.risk_level, v.min_amount, v.lock_days, v.active, v.min_tier, plan.id]);
   await h.audit(req, 'plan_updated', null, { plan: plan.slug, ...v });
   h.flash(req, 'success', `${v.name} plan settings saved. A new lock-in period applies to new investments only.`);
   res.redirect(`/admin/plans/${plan.id}#settings`);

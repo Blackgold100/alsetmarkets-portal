@@ -329,3 +329,5 @@ body:has(.chat-widget) .page { padding-bottom: 104px; }
 .proof-thumb { display: inline-block; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; line-height: 0; }
 .proof-thumb img { width: 120px; height: 80px; object-fit: cover; object-position: top; }
 .proof-full { max-width: 100%; max-height: 640px; border: 1px solid var(--line); border-radius: 10px; display: block; }
+.plan-locked { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; background: #FBF8EE; border: 1px solid #EBDDAA; border-radius: 10px; padding: 14px; color: var(--ink); }
+.plan-locked svg { color: var(--gold-ink); }

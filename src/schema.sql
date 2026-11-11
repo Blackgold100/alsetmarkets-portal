@@ -273,3 +273,26 @@ CREATE TABLE IF NOT EXISTS deposit_proofs (
   data           BYTEA NOT NULL,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ---------- Alpha tier and tier-restricted plans ----------
+-- Alpha sits between Professional and VIP (upgrade amount $10,000) and unlocks the
+-- Real-World Assets plan. Runs once: only when Alpha doesn't exist yet.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM tiers WHERE name='Alpha') THEN
+    UPDATE tiers SET rank = rank + 1 WHERE rank >= 4;
+    INSERT INTO tiers (name, rank, upgrade_amount, benefits, offered, plan_limit, limit_set) VALUES
+      ('Alpha', 4, 10000,
+       E'Access to the Real-World Assets plan (property and short-term rentals)\nA dedicated account manager\nPriority processing of deposits and withdrawals\nQuarterly property portfolio report',
+       TRUE, 100000, TRUE);
+    UPDATE tiers SET benefits = E'Access to the Real-World Assets plan\n' || COALESCE(benefits, '')
+    WHERE name='VIP' AND COALESCE(benefits, '') NOT ILIKE '%Real-World Assets%';
+  END IF;
+END $$;
+
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS min_tier TEXT;
+INSERT INTO plans (slug, name, summary, description, risk_level, min_amount, lock_days, sort, min_tier) VALUES
+ ('real-world-assets', 'Real-World Assets', 'Property and short-term rental income, available from the Alpha tier.',
+  'Capital is allocated to real-world assets, mainly residential property let as short-term holiday rentals and tokenised property shares. Weekly results reflect rental income, occupancy, nightly rates, management and maintenance costs, and changes in property valuations, and can be negative. Property is less liquid than listed markets, which is why this plan has a longer lock-in.',
+  'Medium', 1000, 180, 4, 'Alpha')
+ON CONFLICT (slug) DO NOTHING;

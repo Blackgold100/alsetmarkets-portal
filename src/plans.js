@@ -68,8 +68,11 @@ async function invest({ user, plan, amount, summarize }) {
     await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [user.id]);
     const { rows: txs } = await c.query('SELECT * FROM transactions WHERE user_id=$1', [user.id]);
     const s = summarize(txs, await inPlansValue(user.id, c));
+    // Plans reserved for higher tiers
+    const U = require('./upgrades');
+    if (!(await U.meetsTier(user, plan.min_tier, c))) { await c.query('ROLLBACK'); return { error: 'tier_required', minTier: plan.min_tier }; }
     // Tier threshold on money put into plans (profits growing inside a plan don't count)
-    const lim = await require('./upgrades').planLimitFor(user, c);
+    const lim = await U.planLimitFor(user, c);
     if (lim.limit !== null && amount > lim.remaining + 1e-9) {
       await c.query('ROLLBACK');
       return { error: 'tier_limit', limit: lim };

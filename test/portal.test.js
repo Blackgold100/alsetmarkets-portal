@@ -241,6 +241,14 @@ async function cleanup(walletIds) {
       check(r.text.includes('tier allows up to') && r.text.includes('Upgrade'), 'investing beyond the Standard tier threshold is refused with an upgrade prompt');
       check(r.text.includes('plan investment limit'), 'plans page shows the tier threshold and how much is used');
     }
+    const { rows: [rwa] } = await db.query("SELECT * FROM plans WHERE min_tier IS NOT NULL AND active ORDER BY id LIMIT 1");
+    if (rwa) {
+      r = await c.req('/plans');
+      check(r.text.includes(`Available from the ${rwa.min_tier} tier`), `the ${rwa.name} plan shows as locked to the ${rwa.min_tier} tier for a Standard client`);
+      await c.post('/plans', `/plans/${rwa.id}/invest`, { amount: String(rwa.min_amount), password: 'ClientTest2026', accept: 'on' });
+      r = await c.req('/plans');
+      check(r.text.includes(`available from the ${rwa.min_tier} tier`), `investing in the ${rwa.name} plan below the ${rwa.min_tier} tier is refused`);
+    }
     await c.post('/plans', `/plans/positions/${pos.id}/redeem`, {});
     check((await c.flash('/plans')) === 'error', 'cannot withdraw from a plan before the lock-in ends');
     const day = new Date().toISOString().slice(0, 10);
@@ -303,6 +311,11 @@ async function cleanup(walletIds) {
       await a.post(`/admin/clients/${id}`, `/admin/upgrade-requests/${req2}/complete`, {});
       ({ rows: [cu] } = await db.query('SELECT tier FROM users WHERE id=$1', [id]));
       check(cu.tier === top.name, `admin can complete an upgrade manually (${top.name})`);
+      const { rows: [rwa2] } = await db.query("SELECT * FROM plans WHERE min_tier IS NOT NULL AND active ORDER BY id LIMIT 1");
+      if (rwa2) {
+        r = await c.req('/plans');
+        check(r.text.includes(`action="/plans/${rwa2.id}/invest"`), `after upgrading, the ${rwa2.name} plan is open to the client`);
+      }
     }
     r = await a.req('/admin/tiers');
     check(r.status === 200, 'admin tiers page loads');

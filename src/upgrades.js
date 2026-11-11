@@ -24,6 +24,15 @@ async function planLimitFor(user, client) {
   return { tier: user.tier, limit, used, remaining: limit === null ? null : Math.max(0, Math.round((limit - used) * 100) / 100) };
 }
 
+// Can this client invest in a plan that requires `minTier`? (null = open to every tier)
+async function meetsTier(user, minTier, client) {
+  if (!minTier) return true;
+  const q = client ? client.query.bind(client) : query;
+  const { rows } = await q('SELECT name, rank FROM tiers WHERE name = ANY($1)', [[user.tier, minTier]]);
+  const r = Object.fromEntries(rows.map((x) => [x.name, x.rank]));
+  return r[minTier] !== undefined && (r[user.tier] || 0) >= r[minTier];
+}
+
 async function openRequest(userId) {
   const { rows } = await query(
     "SELECT * FROM upgrade_requests WHERE user_id=$1 AND status IN ('awaiting_deposit','deposit_submitted') ORDER BY id DESC LIMIT 1", [userId]);
@@ -47,4 +56,4 @@ async function applyIfReady(txId) {
   return t.target_tier;
 }
 
-module.exports = { allTiers, offersFor, openRequest, applyIfReady, planLimitFor };
+module.exports = { allTiers, offersFor, openRequest, applyIfReady, planLimitFor, meetsTier };

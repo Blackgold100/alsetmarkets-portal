@@ -16,7 +16,7 @@
     <article class="card stack">
       <div class="plan-head">
         <div><h2 style="font-size: 20px"><%= p.name %></h2><p class="muted" style="margin: 4px 0 0"><%= p.summary %></p></div>
-        <span class="pill <%= p.active ? 'pill-active' : 'pill-neutral' %>"><%= p.active ? 'Open to new investment' : 'Closed to new investment' %></span>
+        <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px"><span class="pill <%= p.active ? 'pill-active' : 'pill-neutral' %>"><%= p.active ? 'Open to new investment' : 'Closed to new investment' %></span><% if (p.min_tier) { %><span class="pill pill-gold"><%= p.min_tier %> tier and above</span><% } %></span>
       </div>
       <dl class="plan-facts">
         <div><dt>Invested now</dt><dd class="num"><%= money(p.aum, 'USD', 0) %></dd></div>

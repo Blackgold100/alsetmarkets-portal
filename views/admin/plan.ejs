@@ -5,7 +5,7 @@
     <div>
       <p style="margin: 0 0 4px"><a href="/admin/plans" style="text-decoration: none">← All plans</a></p>
       <h1><%= plan.name %> plan</h1>
-      <p><%= plan.risk_level %> risk · minimum <%= money(plan.min_amount, 'USD', 0) %> · <%= plan.lock_days %>-day lock-in · <%= plan.active ? 'open to new investment' : 'closed to new investment' %></p>
+      <p><%= plan.min_tier ? plan.min_tier + ' tier and above · ' : '' %><%= plan.risk_level %> risk · minimum <%= money(plan.min_amount, 'USD', 0) %> · <%= plan.lock_days %>-day lock-in · <%= plan.active ? 'open to new investment' : 'closed to new investment' %></p>
     </div>
   </div>
   <nav class="tabs-anchor" aria-label="Sections"><a href="#post">Post result</a><a href="#history">Results history</a><a href="#investors">Investors</a><a href="#settings">Settings</a></nav>
@@ -129,6 +129,7 @@
         <div class="field"><label for="s-name">Name</label><input id="s-name" name="name" type="text" required value="<%= plan.name %>"></div>
         <div class="field"><label for="s-risk">Risk level</label><select id="s-risk" name="risk_level"><% RISKS.forEach(function (r) { %><option <%= plan.risk_level === r ? 'selected' : '' %>><%= r %></option><% }) %></select></div>
         <div class="field"><label for="s-min">Minimum investment (USD)</label><input id="s-min" name="min_amount" type="text" inputmode="decimal" value="<%= Number(plan.min_amount).toFixed(2) %>"></div>
+        <div class="field"><label for="s-tier">Who can invest</label><select id="s-tier" name="min_tier"><option value="">All tiers</option><% tierNames.forEach(function (n) { %><option value="<%= n %>" <%= plan.min_tier === n ? 'selected' : '' %>><%= n %> tier and above</option><% }) %></select></div>
         <div class="field"><label for="s-lock">Lock-in (days)</label><input id="s-lock" name="lock_days" type="number" min="0" max="3650" value="<%= plan.lock_days %>"><span class="hint">Applies to new investments only.</span></div>
         <div class="field" style="grid-column: 1 / -1"><label for="s-sum">Short summary (shown on the plan card)</label><input id="s-sum" name="summary" type="text" value="<%= plan.summary || '' %>"></div>
         <div class="field" style="grid-column: 1 / -1"><label for="s-desc">Description and risks</label><textarea id="s-desc" name="description"><%= plan.description || '' %></textarea><span class="hint">Describe what the money is used for and how results are measured. Don't promise returns.</span></div>

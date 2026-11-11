@@ -39,7 +39,10 @@
     <article class="card plan-card" id="plan-<%= p.slug %>">
       <div class="plan-head">
         <div><h2 style="font-size: 20px"><%= p.name %></h2><p class="muted" style="margin: 4px 0 0"><%= p.summary %></p></div>
-        <span class="pill <%= /high/i.test(p.risk_level) ? 'pill-pending' : 'pill-info' %>"><%= p.risk_level %> risk</span>
+        <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px">
+          <span class="pill <%= /high/i.test(p.risk_level) ? 'pill-pending' : 'pill-info' %>"><%= p.risk_level %> risk</span>
+          <% if (p.min_tier) { %><span class="pill pill-gold"><%= p.min_tier %> tier</span><% } %>
+        </span>
       </div>
       <dl class="plan-facts">
         <div><dt>Minimum</dt><dd class="num"><%= money(p.min_amount, cur, 0) %></dd></div>
@@ -57,6 +60,13 @@
         <% } %>
       </div>
       <% if (p.description) { %><details class="box"><summary>About this plan</summary><p style="margin: 0; color: var(--ink-2)"><%= p.description %></p></details><% } %>
+      <% if (!p.eligible) { %>
+      <div class="plan-form plan-locked">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <div><strong>Available from the <%= p.min_tier %> tier</strong><div class="muted" style="font-size: 13px">You're on <%= user.tier %>. Upgrade to invest in this plan.</div></div>
+        <a class="btn btn-gold" href="/upgrade">Upgrade to <%= p.min_tier %></a>
+      </div>
+      <% } else { %>
       <form method="post" action="/plans/<%= p.id %>/invest" class="stack plan-form">
         <input type="hidden" name="_csrf" value="<%= csrf %>">
         <div class="field"><label for="amt-<%= p.id %>">Amount to invest (<%= cur %>)</label><input id="amt-<%= p.id %>" name="amount" type="text" inputmode="decimal" required placeholder="Min <%= money(p.min_amount, cur, 0) %>"></div>
@@ -65,6 +75,7 @@
         <button class="btn btn-primary" type="submit" <%= s.available < p.min_amount || user.status !== 'active' || (limit.limit !== null && limit.remaining < p.min_amount) ? 'disabled' : '' %>>Invest in <%= p.name %></button>
         <% if (user.status !== 'active') { %><span class="hint">Available once your account is active.</span><% } else if (limit.limit !== null && limit.remaining < p.min_amount) { %><span class="hint">You've reached your <%= limit.tier %> tier's plan limit. <a href="/upgrade">Upgrade to invest more</a></span><% } else if (s.available < p.min_amount) { %><span class="hint">You need at least <%= money(p.min_amount, cur, 0) %> available. <a href="/funds/deposit">Add funds</a></span><% } %>
       </form>
+      <% } %>
     </article>
     <% }) %>
   </section>

@@ -251,3 +251,11 @@ CREATE TABLE IF NOT EXISTS upgrade_requests (
 );
 CREATE INDEX IF NOT EXISTS upgrade_requests_user ON upgrade_requests(user_id, status);
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS upgrade_request_id INTEGER REFERENCES upgrade_requests(id) ON DELETE SET NULL;
+
+-- Tier thresholds: the most a client on each tier can have invested (principal) in plans.
+-- NULL = no limit. Applies to new investments only; profits and withdrawals are never limited.
+ALTER TABLE tiers ADD COLUMN IF NOT EXISTS plan_limit NUMERIC(16,2);
+ALTER TABLE tiers ADD COLUMN IF NOT EXISTS limit_set BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE tiers SET plan_limit = CASE name WHEN 'Starter' THEN 2000 WHEN 'Standard' THEN 10000 WHEN 'Professional' THEN 50000 ELSE NULL END,
+                 limit_set = TRUE
+WHERE NOT limit_set;

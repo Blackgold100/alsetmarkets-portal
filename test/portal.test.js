@@ -199,6 +199,14 @@ async function cleanup(walletIds) {
     check(r.text.includes('$9,000.00') && r.text.includes('$7,000.00'), 'balance stays $9,000.00; available drops to $7,000.00');
     await c.post('/plans', `/plans/${tp.id}/invest`, { amount: '8000', password: 'ClientTest2026', accept: 'on' });
     check((await c.flash('/plans')) === 'error', 'cannot invest more than the available balance');
+    const { rows: [stdTier] } = await db.query("SELECT plan_limit FROM tiers WHERE name='Standard'");
+    if (stdTier && stdTier.plan_limit !== null) {
+      const over = (Number(stdTier.plan_limit) - 2000 + 1).toFixed(2);
+      await c.post('/plans', `/plans/${tp.id}/invest`, { amount: over, password: 'ClientTest2026', accept: 'on' });
+      r = await c.req('/plans');
+      check(r.text.includes('tier allows up to') && r.text.includes('Upgrade'), 'investing beyond the Standard tier threshold is refused with an upgrade prompt');
+      check(r.text.includes('plan investment limit'), 'plans page shows the tier threshold and how much is used');
+    }
     await c.post('/plans', `/plans/positions/${pos.id}/redeem`, {});
     check((await c.flash('/plans')) === 'error', 'cannot withdraw from a plan before the lock-in ends');
     const day = new Date().toISOString().slice(0, 10);

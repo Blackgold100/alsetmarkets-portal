@@ -14,6 +14,16 @@ async function offersFor(user) {
   return { current, offers: tiers.filter((t) => t.offered && t.rank > rank && t.upgrade_amount > 0) };
 }
 
+// The client's plan threshold: limit for their tier, principal already in open plans, room left.
+async function planLimitFor(user, client) {
+  const q = client ? client.query.bind(client) : query;
+  const { rows: [t] } = await q('SELECT name, plan_limit FROM tiers WHERE name=$1', [user.tier]);
+  const { rows: [u] } = await q("SELECT COALESCE(SUM(principal),0) AS used FROM plan_positions WHERE user_id=$1 AND status='active'", [user.id]);
+  const limit = t && t.plan_limit !== null ? Number(t.plan_limit) : null;
+  const used = Number(u.used);
+  return { tier: user.tier, limit, used, remaining: limit === null ? null : Math.max(0, Math.round((limit - used) * 100) / 100) };
+}
+
 async function openRequest(userId) {
   const { rows } = await query(
     "SELECT * FROM upgrade_requests WHERE user_id=$1 AND status IN ('awaiting_deposit','deposit_submitted') ORDER BY id DESC LIMIT 1", [userId]);
@@ -37,4 +47,4 @@ async function applyIfReady(txId) {
   return t.target_tier;
 }
 
-module.exports = { allTiers, offersFor, openRequest, applyIfReady };
+module.exports = { allTiers, offersFor, openRequest, applyIfReady, planLimitFor };

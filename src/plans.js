@@ -68,6 +68,12 @@ async function invest({ user, plan, amount, summarize }) {
     await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [user.id]);
     const { rows: txs } = await c.query('SELECT * FROM transactions WHERE user_id=$1', [user.id]);
     const s = summarize(txs, await inPlansValue(user.id, c));
+    // Tier threshold on money put into plans (profits growing inside a plan don't count)
+    const lim = await require('./upgrades').planLimitFor(user, c);
+    if (lim.limit !== null && amount > lim.remaining + 1e-9) {
+      await c.query('ROLLBACK');
+      return { error: 'tier_limit', limit: lim };
+    }
     if (amount > s.available + 1e-9) {
       await c.query('ROLLBACK');
       return { error: `You have ${s.available.toFixed(2)} available to invest.`, available: s.available };

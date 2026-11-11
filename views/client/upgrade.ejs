@@ -3,7 +3,7 @@
 <main class="page" style="max-width: 1080px">
   <%- include('../partials/flash') %>
   <div class="page-head">
-    <div><h1>Upgrade your account</h1><p>You're on the <strong><%= user.tier %></strong> tier. Higher tiers add more personal service. Upgrading is optional.</p></div>
+    <div><h1>Upgrade your account</h1><p>You're on the <strong><%= user.tier %></strong> tier<%= current && current.plan_limit !== null ? ', which lets you invest up to ' + money(current.plan_limit, cur, 0) + ' in plans' : '' %>. Upgrade to invest more and get more personal service.</p></div>
     <a class="btn btn-outline" href="/">Back to overview</a>
   </div>
 
@@ -32,7 +32,7 @@
       <li><strong>Deposit that amount into your own account.</strong> It's added to your balance and <strong>stays your money</strong>: you can invest it in a plan or withdraw it under the normal rules.</li>
       <li><strong>Your tier changes once the deposit is confirmed.</strong> This usually takes less than one business day.</li>
     </ol>
-    <p class="muted" style="margin: 10px 0 0; font-size: 13px">Your current account, balance, profits and plan investments keep working the same way whether or not you upgrade. Nothing is charged for upgrading.</p>
+    <p class="muted" style="margin: 10px 0 0; font-size: 13px">An upgrade raises how much you can put into investment plans. Your existing balance, profits and plan investments are never reduced or locked by your tier, and nothing is charged for upgrading.</p>
   </section>
 
   <% if (offers.length) { %>
@@ -48,6 +48,9 @@
         <div class="num" style="font-size: 30px; font-weight: 600"><%= money(t.upgrade_amount, cur, 0) %></div>
         <div class="muted" style="font-size: 13px">Deposited to your own balance</div>
       </div>
+      <ul class="benefits">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span><strong><%= t.plan_limit !== null ? 'Invest up to ' + money(t.plan_limit, cur, 0) + ' in plans' : 'No limit on plan investments' %></strong><% if (current && current.plan_limit !== null) { %> <span class="muted">(<%= current.name %>: <%= money(current.plan_limit, cur, 0) %>)</span><% } %></span></li>
+      </ul>
       <% if (t.benefitList.length) { %>
       <ul class="benefits">
         <% t.benefitList.forEach(function (b) { %><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span><%= b %></span></li><% }) %>

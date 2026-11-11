@@ -467,8 +467,9 @@ router.post('/tiers/:tid', wrap(async (req, res) => {
   const amount = req.body.upgrade_amount === '' ? null : h.nonNeg(req.body.upgrade_amount);
   const benefits = h.optStr(String(req.body.benefits || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 10).join('\n'), 1500);
   const offered = req.body.offered === 'on' && amount > 0;
-  await query('UPDATE tiers SET upgrade_amount=$1, benefits=$2, offered=$3 WHERE id=$4', [amount, benefits, offered, t.id]);
-  await h.audit(req, 'tier_updated', null, { tier: t.name, upgrade_amount: amount, offered, benefits });
+  const planLimit = String(req.body.plan_limit ?? '').trim() === '' ? null : h.nonNeg(req.body.plan_limit);
+  await query('UPDATE tiers SET upgrade_amount=$1, benefits=$2, offered=$3, plan_limit=$4, limit_set=TRUE WHERE id=$5', [amount, benefits, offered, planLimit, t.id]);
+  await h.audit(req, 'tier_updated', null, { tier: t.name, upgrade_amount: amount, offered, benefits, plan_limit: planLimit });
   h.flash(req, 'success', `${t.name} saved${req.body.offered === 'on' && !offered ? ' (not offered: set an upgrade amount first)' : ''}.`);
   res.redirect('/admin/tiers');
 }));

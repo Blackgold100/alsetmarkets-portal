@@ -25,7 +25,9 @@ client.get('/', wrap(async (req, res) => {
     query('SELECT * FROM transactions WHERE user_id=$1', [req.user.id]),
   ]);
   const inPlans = positions.filter((p) => p.status === 'active').reduce((a, p) => a + p.value, 0);
-  res.render('client/plans', { title: 'Investment plans', plans, positions, summary: summarize(txs, inPlans) });
+  const U = require('../upgrades');
+  const [limit, { offers }] = await Promise.all([U.planLimitFor(req.user), U.offersFor(req.user)]);
+  res.render('client/plans', { title: 'Investment plans', plans, positions, summary: summarize(txs, inPlans), limit, nextTier: offers[0] || null });
 }));
 
 client.post('/:id/invest', limiter, wrap(async (req, res) => {
@@ -39,6 +41,13 @@ client.post('/:id/invest', limiter, wrap(async (req, res) => {
   if (req.body.accept !== 'on') { h.flash(req, 'error', 'Please confirm you understand the risks and the lock-in period.'); return res.redirect(back); }
   if (!(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) { h.flash(req, 'error', 'Your password was incorrect. Nothing was invested.'); return res.redirect(back); }
   const r = await P.invest({ user: u, plan, amount, summarize });
+  if (r.error === 'tier_limit') {
+    const l = r.limit;
+    h.flash(req, 'error', l.remaining > 0
+      ? `Your ${l.tier} tier allows up to ${h.money(l.limit, u.base_currency)} in investment plans. You can add up to ${h.money(l.remaining, u.base_currency)} more, or upgrade your tier to invest beyond this.`
+      : `You've reached your ${l.tier} tier's limit of ${h.money(l.limit, u.base_currency)} in investment plans. Upgrade your tier to invest more.`);
+    return res.redirect(back);
+  }
   if (r.error) { h.flash(req, 'error', `You can invest up to ${h.money(r.available, u.base_currency)} from your available balance.`); return res.redirect(back); }
   await h.audit(req, 'plan_invested', u.id, { plan: plan.slug, amount, position: r.position.id, unlocks_on: r.position.unlocks_on });
   h.flash(req, 'success', `${h.money(amount, u.base_currency)} is now in the ${plan.name} plan. It is locked until ${h.date(r.position.unlocks_on)}.`);

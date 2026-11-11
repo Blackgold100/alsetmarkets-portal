@@ -217,3 +217,37 @@ INSERT INTO plans (slug, name, summary, description, risk_level, min_amount, loc
   'Capital is actively traded across major cryptocurrency pairs. Results are highly volatile: weeks with large gains or losses are both possible.',
   'High', 250, 30, 3)
 ON CONFLICT (slug) DO NOTHING;
+
+-- ---------- Account tiers & upgrades ----------
+-- The upgrade amount is a deposit into the client's OWN balance (it stays theirs and
+-- remains withdrawable). The tier changes once an admin approves that deposit.
+CREATE TABLE IF NOT EXISTS tiers (
+  id             SERIAL PRIMARY KEY,
+  name           TEXT NOT NULL UNIQUE,
+  rank           INTEGER NOT NULL,
+  upgrade_amount NUMERIC(16,2),
+  benefits       TEXT,
+  offered        BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO tiers (name, rank, upgrade_amount, benefits, offered) VALUES
+ ('Starter', 1, NULL, NULL, FALSE),
+ ('Standard', 2, NULL, NULL, FALSE),
+ ('Professional', 3, 5000, E'A dedicated account manager\nPriority processing of deposits and withdrawals\nMonthly performance summary call', TRUE),
+ ('VIP', 4, 25000, E'A senior relationship manager, reachable by phone\nSame-day withdrawal processing\nQuarterly portfolio review\nEarly access to new investment plans', TRUE)
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS upgrade_requests (
+  id           SERIAL PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tier_id      INTEGER NOT NULL REFERENCES tiers(id),
+  from_tier    TEXT,
+  target_tier  TEXT NOT NULL,
+  amount       NUMERIC(16,2) NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'awaiting_deposit'
+               CHECK (status IN ('awaiting_deposit','deposit_submitted','completed','cancelled')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS upgrade_requests_user ON upgrade_requests(user_id, status);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS upgrade_request_id INTEGER REFERENCES upgrade_requests(id) ON DELETE SET NULL;

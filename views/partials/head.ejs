@@ -26,6 +26,7 @@
         <a href="/admin" class="<%= (path === '/admin' || path === '/admin/' || path.startsWith('/admin/clients/') || path.startsWith('/admin/transactions')) && path !== '/admin/clients/new' ? 'active' : '' %>">Clients</a>
         <a href="/admin/clients/new" class="<%= path === '/admin/clients/new' ? 'active' : '' %>">Add client</a>
         <a href="/admin/plans" class="<%= path.startsWith('/admin/plans') ? 'active' : '' %>">Plans</a>
+        <a href="/admin/tiers" class="<%= path.startsWith('/admin/tiers') ? 'active' : '' %>">Tiers</a>
         <a href="/admin/chat" class="<%= path.startsWith('/admin/chat') ? 'active' : '' %>">Support chat <span class="nav-badge" data-support-badge hidden></span></a>
         <a href="/admin/wallets" class="<%= path.startsWith('/admin/wallets') ? 'active' : '' %>">Wallets</a>
         <a href="/admin/notices" class="<%= path.startsWith('/admin/notices') ? 'active' : '' %>">Announcements</a>

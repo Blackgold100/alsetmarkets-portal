@@ -7,6 +7,13 @@
     <a class="btn btn-outline" href="/">Back to overview</a>
   </div>
 
+  <% if (upgrade) { %>
+  <div class="alert alert-info" role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    <span><strong>Upgrade to <%= upgrade.target_tier %>: deposit <span class="num"><%= money(upgrade.amount, cur) %></span></strong>This deposit goes into your own balance and stays yours. Your account moves to <%= upgrade.target_tier %> once it's confirmed. <a href="/upgrade">Change or cancel</a></span>
+  </div>
+  <% } %>
+
   <ol class="steps" aria-label="How to deposit">
     <li><span class="step-n">1</span><span><strong>Pick a currency and network</strong>Use the exact network shown.</span></li>
     <li><span class="step-n">2</span><span><strong>Send from your wallet or exchange</strong>Copy the address or scan the QR code.</span></li>
@@ -55,8 +62,11 @@
           <select id="wallet_id" name="wallet_id" required>
             <% wallets.forEach(function (w) { %><option value="<%= w.id %>"><%= w.asset %> · <%= networkName(w.network) %></option><% }) %>
           </select></div>
-        <div class="field"><label for="amount">Amount sent (<%= cur %> value)</label><input id="amount" name="amount" type="text" inputmode="decimal" required placeholder="e.g. 1,000.00"><span class="hint">Minimum <%= money(minDeposit, cur) %>. Stablecoins (USDT/USDC) are credited 1:1.</span></div>
+        <div class="field"><label for="amount">Amount sent (<%= cur %> value)</label><input id="amount" name="amount" type="text" inputmode="decimal" required placeholder="e.g. 1,000.00" value="<%= upgrade ? Number(upgrade.amount).toFixed(2) : '' %>"><span class="hint">Minimum <%= money(minDeposit, cur) %>. Stablecoins (USDT/USDC) are credited 1:1.</span></div>
         <div class="field"><label for="tx_hash">Transaction hash (TxID)</label><input id="tx_hash" name="tx_hash" type="text" required autocomplete="off" spellcheck="false" class="num"><span class="hint">Find it in your wallet or exchange's withdrawal history.</span></div>
+        <% if (upgrade) { %>
+        <label class="check" style="font-weight: 400; font-size: 13px; min-height: 0; align-items: flex-start"><input type="checkbox" name="upgrade_request_id" value="<%= upgrade.id %>" checked style="margin-top: 2px"> <span>This deposit is for my upgrade to <%= upgrade.target_tier %></span></label>
+        <% } %>
         <button class="btn btn-primary" type="submit">Submit deposit</button>
       </form>
     </section>

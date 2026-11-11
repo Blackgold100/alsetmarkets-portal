@@ -18,6 +18,8 @@ const TRX = 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE';
 const TRX2 = 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf';
 const H1 = RUN.padEnd(64, 'a').replace(/[^0-9a-f]/g, 'c').slice(0, 64);
 const H2 = RUN.padEnd(64, 'b').replace(/[^0-9a-f]/g, 'd').slice(0, 64);
+const H3 = RUN.padEnd(64, 'e').replace(/[^0-9a-f]/g, 'f').slice(0, 64);
+const H4 = RUN.padEnd(64, '1').replace(/[^0-9a-f]/g, '2').slice(0, 64);
 
 if (!process.env.DATABASE_URL) { console.error('DATABASE_URL is not set. Create the database first (guide step 2).'); process.exit(1); }
 if (process.env.REPLIT_DEPLOYMENT) { console.error('Refusing to run tests on the live deployment. Run npm test in the workspace.'); process.exit(1); }
@@ -222,6 +224,46 @@ async function cleanup(walletIds) {
     r = await c.req('/funds/withdraw');
     check(r.text.includes('$8,970.00') && !r.text.includes('Not including'), 'released investment returns to available ($8,970.00)');
     for (const p of ['/admin/plans', `/admin/plans/${tp.id}`, `/admin/clients/${id}`]) { r = await a.req(p); check(r.status === 200, `admin page ${p} loads`); }
+
+    console.log('\nAccount upgrades');
+    const { rows: tierRows } = await db.query("SELECT * FROM tiers WHERE offered AND upgrade_amount > 0 ORDER BY rank");
+    const pro = tierRows[0], top = tierRows[tierRows.length - 1];
+    r = await c.req('/upgrade');
+    check(r.status === 200 && r.text.includes(pro.name) && r.text.includes(top.name) && r.text.includes('stays your money'), `upgrade page lists ${pro.name} and ${top.name} and says the deposit stays the client's`);
+    r = await c.post('/upgrade', `/upgrade/${pro.id}/choose`, {});
+    const reqId = (r.loc || '').split('upgrade=')[1];
+    check(r.loc && r.loc.startsWith('/funds/deposit?upgrade='), 'choosing a tier goes to the deposit page');
+    r = await c.req(r.loc);
+    check(r.text.includes(`Upgrade to ${pro.name}`) && r.text.includes(`value="${Number(pro.upgrade_amount).toFixed(2)}"`), 'deposit page shows the upgrade and pre-fills its amount');
+    await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: String(pro.upgrade_amount), tx_hash: H3, upgrade_request_id: reqId });
+    let { rows: [ur] } = await db.query('SELECT * FROM upgrade_requests WHERE id=$1', [reqId]);
+    let { rows: [cu] } = await db.query('SELECT tier FROM users WHERE id=$1', [id]);
+    check(ur.status === 'deposit_submitted' && cu.tier === 'Standard', 'tier does not change until the deposit is approved');
+    const { rows: [upDep] } = await db.query('SELECT id FROM transactions WHERE tx_hash=$1', [H3]);
+    r = await a.req('/admin');
+    check(r.text.includes(`Upgrade to ${pro.name}`), 'admin approval queue labels the upgrade deposit');
+    await a.post('/admin', `/admin/transactions/${upDep.id}/status`, { status: 'completed', back: 'dashboard' });
+    ({ rows: [ur] } = await db.query('SELECT * FROM upgrade_requests WHERE id=$1', [reqId]));
+    ({ rows: [cu] } = await db.query('SELECT tier, upgrade_active FROM users WHERE id=$1', [id]));
+    check(ur.status === 'completed' && cu.tier === pro.name && cu.upgrade_active === false, `approving the deposit upgrades the client to ${pro.name} and hides the notice`);
+    r = await c.req('/');
+    check(r.text.includes(`Welcome to ${pro.name}`), 'client sees a confirmation on the dashboard');
+    if (top.id !== pro.id) {
+      r = await c.post('/upgrade', `/upgrade/${top.id}/choose`, {});
+      const req2 = (r.loc || '').split('upgrade=')[1];
+      await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '100', tx_hash: H4, upgrade_request_id: req2 });
+      const { rows: [shortDep] } = await db.query('SELECT id FROM transactions WHERE tx_hash=$1', [H4]);
+      r = await a.req('/admin');
+      check(r.text.includes('Short of'), 'a deposit below the upgrade amount is flagged as short');
+      await a.post('/admin', `/admin/transactions/${shortDep.id}/status`, { status: 'completed', back: 'dashboard' });
+      ({ rows: [cu] } = await db.query('SELECT tier FROM users WHERE id=$1', [id]));
+      check(cu.tier === pro.name, 'a short deposit is credited but does not upgrade the account');
+      await a.post(`/admin/clients/${id}`, `/admin/upgrade-requests/${req2}/complete`, {});
+      ({ rows: [cu] } = await db.query('SELECT tier FROM users WHERE id=$1', [id]));
+      check(cu.tier === top.name, `admin can complete an upgrade manually (${top.name})`);
+    }
+    r = await a.req('/admin/tiers');
+    check(r.status === 200, 'admin tiers page loads');
 
     console.log('\nLive support chat');
     r = await c.json('GET', '/chat/api/messages');

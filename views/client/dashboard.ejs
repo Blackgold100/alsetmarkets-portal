@@ -58,7 +58,7 @@
     <% if (client.upgrade_cta_url) { %>
       <a class="btn btn-gold" href="<%= client.upgrade_cta_url %>" rel="noopener"><%= client.upgrade_cta_label || 'Learn more' %></a>
     <% } else { %>
-      <a class="btn btn-gold" href="mailto:<%= brand.supportEmail %>?subject=Account%20upgrade%20-%20<%= client.account_no %>"><%= client.upgrade_cta_label || 'Contact us to upgrade' %></a>
+      <a class="btn btn-gold" href="<%= preview ? '#' : '/upgrade' %>"><%= client.upgrade_cta_label || 'See upgrade options' %></a>
     <% } %>
   </section>
   <% } %>
@@ -153,7 +153,7 @@
       </div>
       <dl class="facts">
         <dt>Account number</dt><dd class="num"><%= client.account_no %></dd>
-        <dt>Account tier</dt><dd><span class="pill pill-gold"><%= client.tier %></span><% if (client.upgrade_active) { %> <span style="color: var(--blue-ink)">· Upgrade available</span><% } %></dd>
+        <dt>Account tier</dt><dd><span class="pill pill-gold"><%= client.tier %></span> <a href="<%= preview ? '#' : '/upgrade' %>" style="font-weight: 500"><%= client.upgrade_active ? 'Upgrade available' : 'Upgrade options' %></a></dd>
         <dt>Identity (KYC)</dt>
         <dd class="<%= client.kyc_status === 'verified' ? 'up' : client.kyc_status === 'rejected' ? 'down' : '' %>">
           <%= titleCase(client.kyc_status) %><%= client.kyc_status === 'verified' && client.kyc_verified_on ? ' · ' + fmtDate(client.kyc_verified_on) : '' %>

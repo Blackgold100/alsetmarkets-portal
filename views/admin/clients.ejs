@@ -27,7 +27,7 @@
           <tr>
             <td class="num muted"><%= fmtDate(t.tx_date) %></td>
             <td><a href="/admin/clients/<%= t.user_id %>#transactions"><%= t.full_name %></a> <span class="num muted"><%= t.account_no %></span></td>
-            <td style="font-weight: 500"><%= titleCase(t.type) %></td>
+            <td style="font-weight: 500"><%= titleCase(t.type) %><% if (t.target_tier) { %><div><span class="pill pill-gold">Upgrade to <%= t.target_tier %></span></div><% if (t.amount + 1e-9 < t.upgrade_amount) { %><div class="down" style="font-size: 12px">Short of <%= money(t.upgrade_amount, t.base_currency) %></div><% } %><% } %></td>
             <td class="num addr-small" style="max-width: 300px">
               <% if (t.asset) { %><div style="font-family: inherit"><%= t.asset %> · <%= networkName(t.network) %></div><% } %>
               <% if (t.wallet_address) { %><div class="muted"><%= t.type === 'withdrawal' ? 'Pay to: ' : 'Sent to: ' %><%= t.wallet_address %><%= t.wallet_memo ? ' · memo ' + t.wallet_memo : '' %></div><% } %>

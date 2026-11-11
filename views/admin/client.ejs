@@ -173,10 +173,24 @@
           <datalist id="tiers"><% TIERS.forEach(function (x) { %><option value="<%= x %>"><% }) %></datalist></div>
         <div class="field"><label for="u-title">Headline</label><input id="u-title" name="upgrade_title" type="text" placeholder="Your account is eligible for Professional" value="<%= client.upgrade_title || '' %>"></div>
         <div class="field"><label for="u-msg">Message</label><textarea id="u-msg" name="upgrade_message" placeholder="Explain the benefits and any requirements."><%= client.upgrade_message || '' %></textarea></div>
-        <div class="field"><label for="u-cta">Button label</label><input id="u-cta" name="upgrade_cta_label" type="text" placeholder="Contact us to upgrade" value="<%= client.upgrade_cta_label || '' %>"></div>
-        <div class="field"><label for="u-url">Button link (optional)</label><input id="u-url" name="upgrade_cta_url" type="url" placeholder="https://www.alsetmarkets.com/upgrade" value="<%= client.upgrade_cta_url || '' %>"><span class="hint">Leave blank to open an email to support.</span></div>
+        <div class="field"><label for="u-cta">Button label</label><input id="u-cta" name="upgrade_cta_label" type="text" placeholder="See upgrade options" value="<%= client.upgrade_cta_label || '' %>"></div>
+        <div class="field"><label for="u-url">Button link (optional)</label><input id="u-url" name="upgrade_cta_url" type="url" placeholder="https://www.alsetmarkets.com/upgrade" value="<%= client.upgrade_cta_url || '' %>"><span class="hint">Leave blank to open the client's upgrade options page.</span></div>
         <div><button class="btn btn-primary" type="submit">Save notice</button></div>
       </form>
+      <p class="muted" style="font-size: 12px; margin: 12px 0 0">Leave the button link empty and the button opens the client's upgrade options (tiers and amounts are set under <a href="/admin/tiers">Tiers</a>).</p>
+      <% if (upgradeRequests.length) { %>
+      <h3 style="font-size: 14px; margin: 16px 0 6px">Upgrade requests</h3>
+      <% upgradeRequests.forEach(function (r) { %>
+        <div style="border-top: 1px solid var(--line-2); padding: 8px 0; font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+          <span style="flex: 1 1 auto"><strong><%= r.target_tier %></strong> · <span class="num"><%= money(r.amount, cur) %></span> · <span class="muted"><%= fmtDate(r.created_at.toISOString()) %></span></span>
+          <span class="pill pill-<%= r.status === 'completed' ? 'completed' : r.status === 'cancelled' ? 'neutral' : 'pending' %>"><%= titleCase(r.status) %></span>
+          <% if (r.status === 'awaiting_deposit' || r.status === 'deposit_submitted') { %>
+            <form method="post" action="/admin/upgrade-requests/<%= r.id %>/complete" class="inline" data-confirm="Upgrade now without waiting for the deposit?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn-link" type="submit">Upgrade now</button></form>
+            <form method="post" action="/admin/upgrade-requests/<%= r.id %>/cancel" class="inline" data-confirm="Cancel this upgrade request?"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn-link" type="submit" style="color: var(--down)">Cancel</button></form>
+          <% } %>
+        </div>
+      <% }) %>
+      <% } %>
     </section>
   </div>
 

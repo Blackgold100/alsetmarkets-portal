@@ -5,6 +5,7 @@ const { query } = require('../db');
 const h = require('../helpers');
 const { dashboardData } = require('../metrics');
 const cx = require('../crypto');
+const upgrades = require('../upgrades');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -17,9 +18,13 @@ const TIERS = (process.env.ACCOUNT_TIERS || 'Starter,Standard,Professional,VIP')
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'NGN'];
 
 router.use(h.requireAdmin);
-router.use((req, res, next) => {
-  Object.assign(res.locals, { STATUSES, KYC, TX_TYPES, TX_STATUS, TIERS, CURRENCIES, adminArea: true });
-  next();
+router.use(async (req, res, next) => {
+  try {
+    // Tier names come from Admin → Tiers; ACCOUNT_TIERS is only a fallback
+    const t = (await upgrades.allTiers()).map((x) => x.name);
+    Object.assign(res.locals, { STATUSES, KYC, TX_TYPES, TX_STATUS, TIERS: t.length ? t : TIERS, CURRENCIES, adminArea: true });
+    next();
+  } catch (e) { next(e); }
 });
 
 const BAL_SQL = `
@@ -60,7 +65,8 @@ router.get('/', wrap(async (req, res) => {
             ${BAL_SQL}
      FROM users u LEFT JOIN transactions t ON t.user_id=u.id WHERE u.role='client'`);
   const { rows: pending } = await query(
-    `SELECT t.*, u.full_name, u.account_no, u.base_currency FROM transactions t JOIN users u ON u.id=t.user_id
+    `SELECT t.*, u.full_name, u.account_no, u.base_currency, r.target_tier, r.amount AS upgrade_amount
+     FROM transactions t JOIN users u ON u.id=t.user_id LEFT JOIN upgrade_requests r ON r.id=t.upgrade_request_id
      WHERE t.status='pending' ORDER BY t.tx_date, t.id LIMIT 20`);
   const { rows: pendingWallets } = await query(
     `SELECT w.*, u.full_name, u.account_no FROM client_wallets w JOIN users u ON u.id=w.user_id
@@ -78,7 +84,7 @@ router.post('/clients', wrap(async (req, res) => {
   const role = h.oneOf(b.role, ['client', 'admin'], 'client');
   const form = {
     full_name: h.str(b.full_name, 120), email: h.str(b.email, 200).toLowerCase(), phone: h.optStr(b.phone, 40),
-    country: h.optStr(b.country, 80), tier: h.oneOf(b.tier, TIERS, TIERS[0]), base_currency: h.oneOf(b.base_currency, CURRENCIES, 'USD'),
+    country: h.optStr(b.country, 80), tier: h.oneOf(b.tier, res.locals.TIERS, res.locals.TIERS.includes('Standard') ? 'Standard' : res.locals.TIERS[0]), base_currency: h.oneOf(b.base_currency, CURRENCIES, 'USD'),
     plan_name: h.optStr(b.plan_name, 120), account_manager: h.optStr(b.account_manager, 120),
     account_no: h.optStr(b.account_no, 30), opened_on: h.isoDate(b.opened_on), role,
   };
@@ -113,7 +119,8 @@ router.get('/clients/:id', wrap(async (req, res) => {
   const { rows: log } = await query('SELECT * FROM audit_log WHERE target_user_id=$1 ORDER BY created_at DESC LIMIT 25', [client.id]);
   const { rows: clientWallets } = await query('SELECT * FROM client_wallets WHERE user_id=$1 ORDER BY created_at DESC', [client.id]);
   const { rows: depositWallets } = await query('SELECT * FROM firm_wallets WHERE user_id=$1 ORDER BY created_at DESC', [client.id]);
-  res.render('admin/client', { title: client.full_name, client, ...data, clientNotices, log, clientWallets, depositWallets, tempPassword: req.session.tempPassword || null, today: new Date().toISOString().slice(0, 10) });
+  const { rows: upgradeRequests } = await query('SELECT * FROM upgrade_requests WHERE user_id=$1 ORDER BY id DESC LIMIT 10', [client.id]);
+  res.render('admin/client', { title: client.full_name, client, ...data, clientNotices, log, clientWallets, depositWallets, upgradeRequests, tempPassword: req.session.tempPassword || null, today: new Date().toISOString().slice(0, 10) });
   delete req.session.tempPassword;
 }));
 
@@ -138,7 +145,7 @@ router.post('/clients/:id/profile', wrap(async (req, res) => {
   const kyc = h.oneOf(b.kyc_status, KYC, c.kyc_status);
   const v = {
     full_name: h.str(b.full_name, 120) || c.full_name, email, phone: h.optStr(b.phone, 40), country: h.optStr(b.country, 80),
-    account_no: accountNo, status: h.oneOf(b.status, STATUSES, c.status), tier: h.oneOf(b.tier, TIERS, c.tier), kyc_status: kyc,
+    account_no: accountNo, status: h.oneOf(b.status, STATUSES, c.status), tier: h.oneOf(b.tier, res.locals.TIERS, c.tier), kyc_status: kyc,
     kyc_verified_on: kyc === 'verified' ? (h.isoDate(b.kyc_verified_on) || c.kyc_verified_on || new Date().toISOString().slice(0, 10)) : null,
     risk_profile: h.optStr(b.risk_profile, 80), plan_name: h.optStr(b.plan_name, 120), account_manager: h.optStr(b.account_manager, 120),
     base_currency: h.oneOf(b.base_currency, CURRENCIES, c.base_currency), opened_on: h.isoDate(b.opened_on) || c.opened_on,
@@ -247,7 +254,9 @@ router.post('/transactions/:tid', wrap(async (req, res) => {
       asset=$7,network=$8,wallet_address=$9,tx_hash=$10,updated_at=NOW() WHERE id=$11`,
     [t.type, t.amount, t.status, t.tx_date, t.reference, t.description, t.asset, t.network, t.wallet_address, t.tx_hash, old.id]);
   await h.audit(req, 'transaction_updated', old.user_id, { id: old.id, from: { type: old.type, amount: old.amount, status: old.status, tx_date: old.tx_date, tx_hash: old.tx_hash, wallet_address: old.wallet_address }, to: t });
-  h.flash(req, 'success', 'Transaction updated.');
+  const upgraded = t.status === 'completed' ? await upgrades.applyIfReady(old.id) : null;
+  if (upgraded) await h.audit(req, 'tier_upgraded', old.user_id, { tier: upgraded, via_transaction: old.id });
+  h.flash(req, 'success', `Transaction updated.${upgraded ? ` The client has been upgraded to ${upgraded}.` : ''}`);
   res.redirect(`/admin/clients/${old.user_id}#transactions`);
 }));
 
@@ -264,7 +273,9 @@ router.post('/transactions/:tid/status', wrap(async (req, res) => {
   if (status) {
     await query('UPDATE transactions SET status=$1, tx_hash=COALESCE($2, tx_hash), updated_at=NOW() WHERE id=$3', [status, hash, old.id]);
     await h.audit(req, 'transaction_status', old.user_id, { id: old.id, from: old.status, to: status, tx_hash: hash || undefined });
-    h.flash(req, 'success', `Transaction marked ${status === 'completed' && old.type === 'withdrawal' ? 'paid' : status}.`);
+    const upgraded = status === 'completed' ? await upgrades.applyIfReady(old.id) : null;
+    if (upgraded) await h.audit(req, 'tier_upgraded', old.user_id, { tier: upgraded, via_transaction: old.id });
+    h.flash(req, 'success', `Transaction marked ${status === 'completed' && old.type === 'withdrawal' ? 'paid' : status}.${upgraded ? ` The client has been upgraded to ${upgraded}.` : ''}`);
   }
   res.redirect(back);
 }));
@@ -438,6 +449,45 @@ router.post('/client-wallets/:wid/delete', wrap(async (req, res) => {
   await h.audit(req, 'withdrawal_wallet_deleted', w.user_id, { asset: w.asset, network: w.network, address: w.address });
   h.flash(req, 'success', 'Withdrawal wallet removed.');
   res.redirect(`/admin/clients/${w.user_id}#wallets`);
+}));
+
+// ---------------- Tiers ----------------
+router.get('/tiers', wrap(async (req, res) => {
+  const tiers = await upgrades.allTiers();
+  const { rows: counts } = await query("SELECT tier, COUNT(*)::int AS n FROM users WHERE role='client' GROUP BY tier");
+  const { rows: requests } = await query(
+    `SELECT r.*, u.full_name, u.account_no FROM upgrade_requests r JOIN users u ON u.id=r.user_id
+     ORDER BY CASE r.status WHEN 'deposit_submitted' THEN 0 WHEN 'awaiting_deposit' THEN 1 ELSE 2 END, r.id DESC LIMIT 100`);
+  res.render('admin/tiers', { title: 'Account tiers', tiers, counts: Object.fromEntries(counts.map((c) => [c.tier, c.n])), requests });
+}));
+
+router.post('/tiers/:tid', wrap(async (req, res) => {
+  const { rows: [t] } = await query('SELECT * FROM tiers WHERE id=$1', [Number(req.params.tid) || 0]);
+  if (!t) return notFound(res);
+  const amount = req.body.upgrade_amount === '' ? null : h.nonNeg(req.body.upgrade_amount);
+  const benefits = h.optStr(String(req.body.benefits || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 10).join('\n'), 1500);
+  const offered = req.body.offered === 'on' && amount > 0;
+  await query('UPDATE tiers SET upgrade_amount=$1, benefits=$2, offered=$3 WHERE id=$4', [amount, benefits, offered, t.id]);
+  await h.audit(req, 'tier_updated', null, { tier: t.name, upgrade_amount: amount, offered, benefits });
+  h.flash(req, 'success', `${t.name} saved${req.body.offered === 'on' && !offered ? ' (not offered: set an upgrade amount first)' : ''}.`);
+  res.redirect('/admin/tiers');
+}));
+
+router.post('/upgrade-requests/:rid/cancel', wrap(async (req, res) => {
+  const { rows: [r] } = await query("UPDATE upgrade_requests SET status='cancelled' WHERE id=$1 AND status IN ('awaiting_deposit','deposit_submitted') RETURNING *", [Number(req.params.rid) || 0]);
+  if (r) await h.audit(req, 'upgrade_request_cancelled', r.user_id, { id: r.id, target: r.target_tier });
+  h.flash(req, 'success', 'Upgrade request cancelled. Any deposit already made stays in the client\u2019s balance.');
+  res.redirect(r ? `/admin/clients/${r.user_id}#profile` : '/admin/tiers');
+}));
+
+router.post('/upgrade-requests/:rid/complete', wrap(async (req, res) => {
+  const { rows: [r] } = await query("SELECT * FROM upgrade_requests WHERE id=$1 AND status IN ('awaiting_deposit','deposit_submitted')", [Number(req.params.rid) || 0]);
+  if (!r) return notFound(res);
+  await query("UPDATE upgrade_requests SET status='completed', completed_at=NOW() WHERE id=$1", [r.id]);
+  await query('UPDATE users SET tier=$1, upgrade_active=FALSE, updated_at=NOW() WHERE id=$2', [r.target_tier, r.user_id]);
+  await h.audit(req, 'tier_upgraded', r.user_id, { tier: r.target_tier, manual: true, request: r.id });
+  h.flash(req, 'success', `Client upgraded to ${r.target_tier}.`);
+  res.redirect(`/admin/clients/${r.user_id}#profile`);
 }));
 
 // ---------------- Team & audit ----------------

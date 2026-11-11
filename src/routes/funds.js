@@ -7,6 +7,7 @@ const h = require('../helpers');
 const cx = require('../crypto');
 const { summarize } = require('../metrics');
 const { inPlansValue } = require('../plans');
+const U = require('../upgrades');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -52,7 +53,10 @@ router.get('/deposit', wrap(async (req, res) => {
   const wallets = await depositWallets(req.user.id);
   const { rows: recent } = await query(
     "SELECT * FROM transactions WHERE user_id=$1 AND type='deposit' ORDER BY created_at DESC LIMIT 10", [req.user.id]);
-  res.render('client/deposit', { title: 'Add funds', wallets, recent, minDeposit: MIN_DEPOSIT, form: {} });
+  // Coming from the upgrade page: show the upgrade and pre-fill its amount
+  const open = await U.openRequest(req.user.id);
+  const upgrade = open && open.status === 'awaiting_deposit' ? open : null;
+  res.render('client/deposit', { title: 'Add funds', wallets, recent, minDeposit: MIN_DEPOSIT, form: {}, upgrade });
 }));
 
 router.post('/deposit', limiter, wrap(async (req, res) => {
@@ -69,12 +73,16 @@ router.post('/deposit', limiter, wrap(async (req, res) => {
   const { rows: dupe } = await query('SELECT 1 FROM transactions WHERE lower(tx_hash)=lower($1)', [hash]);
   if (dupe.length) { h.flash(req, 'error', 'This transaction hash has already been submitted.'); return res.redirect(back); }
 
+  // Linked to an upgrade if the client ticked the box on the deposit form
+  const open = req.body.upgrade_request_id ? await U.openRequest(u.id) : null;
+  const upg = open && open.status === 'awaiting_deposit' && String(open.id) === String(req.body.upgrade_request_id) ? open : null;
   const { rows: [t] } = await query(
-    `INSERT INTO transactions (user_id,type,amount,status,tx_date,description,asset,network,wallet_address,wallet_memo,tx_hash,client_requested)
-     VALUES ($1,'deposit',$2,'pending',CURRENT_DATE,$3,$4,$5,$6,$7,$8,TRUE) RETURNING id`,
-    [u.id, amount, `Crypto deposit · ${w.asset} (${cx.networkName(w.network)})`, w.asset, w.network, w.address, w.memo, hash]);
-  await h.audit(req, 'deposit_submitted', u.id, { id: t.id, amount, asset: w.asset, network: w.network, tx_hash: hash });
-  h.flash(req, 'success', `Deposit of ${h.money(amount, u.base_currency)} submitted. It will be credited once confirmed on the blockchain and approved by our team.`);
+    `INSERT INTO transactions (user_id,type,amount,status,tx_date,description,asset,network,wallet_address,wallet_memo,tx_hash,client_requested,upgrade_request_id)
+     VALUES ($1,'deposit',$2,'pending',CURRENT_DATE,$3,$4,$5,$6,$7,$8,TRUE,$9) RETURNING id`,
+    [u.id, amount, `Crypto deposit · ${w.asset} (${cx.networkName(w.network)})${upg ? ` · upgrade to ${upg.target_tier}` : ''}`, w.asset, w.network, w.address, w.memo, hash, upg ? upg.id : null]);
+  if (upg) await query("UPDATE upgrade_requests SET status='deposit_submitted' WHERE id=$1", [upg.id]);
+  await h.audit(req, 'deposit_submitted', u.id, { id: t.id, amount, asset: w.asset, network: w.network, tx_hash: hash, upgrade_request: upg ? upg.id : undefined });
+  h.flash(req, 'success', `Deposit of ${h.money(amount, u.base_currency)} submitted. It will be credited once confirmed on the blockchain and approved by our team${upg ? (amount + 1e-9 >= upg.amount ? `, and your account will then move to ${upg.target_tier}` : `. This is less than the ${h.money(upg.amount, u.base_currency)} needed for ${upg.target_tier}, so our team will contact you`) : ''}.`);
   res.redirect(back);
 }));
 

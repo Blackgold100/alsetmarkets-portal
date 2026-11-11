@@ -18,6 +18,10 @@ const TRX = 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE';
 const TRX2 = 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf';
 const H1 = RUN.padEnd(64, 'a').replace(/[^0-9a-f]/g, 'c').slice(0, 64);
 const H2 = RUN.padEnd(64, 'b').replace(/[^0-9a-f]/g, 'd').slice(0, 64);
+// A real 1×1 PNG; extra bytes after it make each test screenshot unique
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+let shotNo = 0;
+const shot = () => ({ data: Buffer.concat([PNG, Buffer.from(`${RUN}-${++shotNo}`)]), name: `proof-${shotNo}.png` });
 const H3 = RUN.padEnd(64, 'e').replace(/[^0-9a-f]/g, 'f').slice(0, 64);
 const H4 = RUN.padEnd(64, '1').replace(/[^0-9a-f]/g, '2').slice(0, 64);
 
@@ -53,6 +57,16 @@ function agent() {
       const r = await fetch(B + p, { method, headers, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
       let data = null; try { data = await r.json(); } catch (e) { /* not JSON */ }
       return { status: r.status, data };
+    },
+    async postFile(page, action, fields, file) {
+      const t = await this.csrf(page);
+      const fd = new FormData();
+      fd.append('_csrf', t);
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+      if (file) fd.append('screenshot', new Blob([file.data], { type: file.type || 'image/png' }), file.name || 'proof.png');
+      const r = await fetch(B + action, { method: 'POST', body: fd, redirect: 'manual', headers: { cookie: Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ') } });
+      for (const c of r.headers.getSetCookie()) { const kv = c.split(';')[0]; const i = kv.indexOf('='); jar[kv.slice(0, i)] = kv.slice(i + 1); }
+      return { status: r.status, loc: r.headers.get('location'), text: await r.text() };
     },
     async flash(p) { const r = await this.req(p); const m = r.text.match(/class="alert alert-(success|error)"[^>]*>[\s\S]*?<span>([^<]*)</); return m ? m[1] : null; },
   };
@@ -148,12 +162,32 @@ async function cleanup(walletIds) {
     r = await c.req('/funds/deposit');
     check(r.text.includes(TRX2) && r.text.includes('data:image/svg+xml'), 'client sees the deposit address and QR code');
     const depWallet = (r.text.match(/<option value="(\d+)">USDT · Tron/) || [])[1];
-    await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500', tx_hash: 'not-a-hash' });
-    check((await c.flash('/funds/deposit')) === 'error', 'invalid transaction hash is rejected');
-    await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500', tx_hash: H1 });
-    check((await c.flash('/funds/deposit')) === 'success', 'deposit submitted as pending');
-    await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500', tx_hash: H1 });
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500' }, null);
+    check((await c.flash('/funds/deposit')) === 'error', 'a deposit without a screenshot is refused');
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500' }, { data: Buffer.from('%PDF-1.4 not an image at all'), name: 'x.png', type: 'image/png' });
+    check((await c.flash('/funds/deposit')) === 'error', 'a file that is not really an image is refused');
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500', tx_hash: 'not-a-hash' }, shot());
+    check((await c.flash('/funds/deposit')) === 'error', 'an invalid (optional) transaction hash is still rejected');
+    r = await c.req('/funds/deposit', { method: 'POST', form: { wallet_id: depWallet, amount: '500' } });
+    check(r.status === 403, 'deposit form without a CSRF token is refused');
+    const firstShot = shot();
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500', tx_hash: H1 }, firstShot);
+    check((await c.flash('/funds/deposit')) === 'success', 'deposit with screenshot and hash submitted as pending');
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500', tx_hash: H1 }, shot());
     check((await c.flash('/funds/deposit')) === 'error', 'the same hash cannot be submitted twice');
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '500' }, firstShot);
+    check((await c.flash('/funds/deposit')) === 'error', 'the same screenshot cannot be submitted twice');
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '250' }, shot());
+    check((await c.flash('/funds/deposit')) === 'success', 'deposit with a screenshot and no hash is accepted');
+    const { rows: [noHash] } = await db.query("SELECT id FROM transactions WHERE user_id=$1 AND type='deposit' AND tx_hash IS NULL AND status='pending'", [id]);
+    r = await fetch(B + `/proofs/${noHash.id}`, { headers: { cookie: '' } , redirect: 'manual' });
+    check(r.status === 302, 'screenshots are not visible without signing in');
+    r = await a.req('/admin');
+    check(r.text.includes(`/proofs/${noHash.id}`), 'admin approval queue shows the screenshot');
+    r = await a.req(`/proofs/${noHash.id}`);
+    const rc = await c.req(`/proofs/${noHash.id}`);
+    check(r.status === 200 && rc.status === 200, 'admin and the client who uploaded it can open the screenshot');
+    await db.query("UPDATE transactions SET status='rejected' WHERE id=$1", [noHash.id]);
     const { rows: [dep] } = await db.query("SELECT id FROM transactions WHERE user_id=$1 AND tx_hash=$2", [id, H1]);
     await a.post('/admin', `/admin/transactions/${dep.id}/status`, { status: 'completed', back: 'dashboard' });
     r = await c.req('/');
@@ -243,7 +277,7 @@ async function cleanup(walletIds) {
     check(r.loc && r.loc.startsWith('/funds/deposit?upgrade='), 'choosing a tier goes to the deposit page');
     r = await c.req(r.loc);
     check(r.text.includes(`Upgrade to ${pro.name}`) && r.text.includes(`value="${Number(pro.upgrade_amount).toFixed(2)}"`), 'deposit page shows the upgrade and pre-fills its amount');
-    await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: String(pro.upgrade_amount), tx_hash: H3, upgrade_request_id: reqId });
+    await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: String(pro.upgrade_amount), tx_hash: H3, upgrade_request_id: reqId }, shot());
     let { rows: [ur] } = await db.query('SELECT * FROM upgrade_requests WHERE id=$1', [reqId]);
     let { rows: [cu] } = await db.query('SELECT tier FROM users WHERE id=$1', [id]);
     check(ur.status === 'deposit_submitted' && cu.tier === 'Standard', 'tier does not change until the deposit is approved');
@@ -259,7 +293,7 @@ async function cleanup(walletIds) {
     if (top.id !== pro.id) {
       r = await c.post('/upgrade', `/upgrade/${top.id}/choose`, {});
       const req2 = (r.loc || '').split('upgrade=')[1];
-      await c.post('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '100', tx_hash: H4, upgrade_request_id: req2 });
+      await c.postFile('/funds/deposit', '/funds/deposit', { wallet_id: depWallet, amount: '100', tx_hash: H4, upgrade_request_id: req2 }, shot());
       const { rows: [shortDep] } = await db.query('SELECT id FROM transactions WHERE tx_hash=$1', [H4]);
       r = await a.req('/admin');
       check(r.text.includes('Short of'), 'a deposit below the upgrade amount is flagged as short');

@@ -13,6 +13,7 @@
       <td class="num muted" style="white-space: nowrap"><%= fmtDate(t.tx_date) %></td>
       <td style="font-weight: 500"><%= titleCase(t.type) %></td>
       <td style="color: var(--ink-2)"><%= t.description || '—' %>
+        <% if (t.has_proof) { %><div style="font-size: 12px"><a href="/proofs/<%= t.id %>" target="_blank" rel="noopener">View screenshot</a></div><% } %>
         <% if (t.tx_hash) { %><div style="font-size: 12px"><% if (txUrl(t.network, t.tx_hash)) { %><a class="num" href="<%= txUrl(t.network, t.tx_hash) %>" target="_blank" rel="noopener noreferrer">Tx <%= shortAddr(t.tx_hash) %> ↗</a><% } else { %><span class="num muted">Tx <%= shortAddr(t.tx_hash) %></span><% } %></div><% } %>
         <% if (admin && t.wallet_address) { %><div class="num muted addr-small"><%= t.type === 'withdrawal' ? 'To' : 'Via' %> <%= t.asset %>/<%= t.network %>: <%= t.wallet_address %><%= t.wallet_memo ? ' · memo ' + t.wallet_memo : '' %></div><% } %>
       </td>

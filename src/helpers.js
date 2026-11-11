@@ -34,16 +34,30 @@ function titleCase(s) {
 }
 
 // ---------- CSRF ----------
+function tokenOk(req, token) {
+  return !!(token && req.session.csrf && token.length === req.session.csrf.length &&
+    crypto.timingSafeEqual(Buffer.from(token), Buffer.from(req.session.csrf)));
+}
+function csrfFail(res) {
+  return res.status(403).render('error', { title: 'Session expired', message: 'Your form session expired. Go back, refresh the page and try again.' });
+}
+// File-upload forms are read by multer inside the route, so their token is checked
+// there with checkCsrf(). Only the routes listed here may receive uploads.
+const MULTIPART_ROUTES = ['/funds/deposit'];
 function csrf(req, res, next) {
   if (!req.session.csrf) req.session.csrf = crypto.randomBytes(24).toString('hex');
   res.locals.csrf = req.session.csrf;
   if (req.method === 'POST') {
-    const token = (req.body && req.body._csrf) || req.get('x-csrf-token');
-    if (!token || token.length !== req.session.csrf.length ||
-        !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(req.session.csrf))) {
-      return res.status(403).render('error', { title: 'Session expired', message: 'Your form session expired. Go back, refresh the page and try again.' });
+    if (req.is('multipart/form-data')) {
+      if (!MULTIPART_ROUTES.includes(req.path)) return csrfFail(res);
+      return next(); // verified by checkCsrf after the upload is parsed
     }
+    if (!tokenOk(req, (req.body && req.body._csrf) || req.get('x-csrf-token'))) return csrfFail(res);
   }
+  next();
+}
+function checkCsrf(req, res, next) {
+  if (!tokenOk(req, (req.body && req.body._csrf) || req.get('x-csrf-token'))) return csrfFail(res);
   next();
 }
 
@@ -138,6 +152,6 @@ function flash(req, type, text) {
 
 module.exports = {
   money, signedMoney, pct, date, dateTime, titleCase,
-  csrf, loadUser, requireLogin, requireAdmin, audit,
+  csrf, checkCsrf, loadUser, requireLogin, requireAdmin, audit,
   str, optStr, amount, nonNeg, isoDate, safeUrl, oneOf, tempPassword, flash,
 };

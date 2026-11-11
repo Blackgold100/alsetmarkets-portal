@@ -259,3 +259,17 @@ ALTER TABLE tiers ADD COLUMN IF NOT EXISTS limit_set BOOLEAN NOT NULL DEFAULT FA
 UPDATE tiers SET plan_limit = CASE name WHEN 'Starter' THEN 2000 WHEN 'Standard' THEN 10000 WHEN 'Professional' THEN 50000 ELSE NULL END,
                  limit_set = TRUE
 WHERE NOT limit_set;
+
+-- ---------- Deposit proof screenshots ----------
+-- Stored in PostgreSQL (Replit deployments don't keep uploaded files on disk).
+CREATE TABLE IF NOT EXISTS deposit_proofs (
+  id             SERIAL PRIMARY KEY,
+  transaction_id INTEGER NOT NULL UNIQUE REFERENCES transactions(id) ON DELETE CASCADE,
+  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  mime           TEXT NOT NULL,
+  size_bytes     INTEGER NOT NULL,
+  sha256         TEXT NOT NULL UNIQUE,
+  original_name  TEXT,
+  data           BYTEA NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

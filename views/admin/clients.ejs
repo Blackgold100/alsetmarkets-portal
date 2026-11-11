@@ -21,7 +21,7 @@
     <div class="card-head"><h2>Awaiting approval</h2></div>
     <div class="table-wrap">
       <table class="data" style="min-width: 720px">
-        <thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Crypto details</th><th class="r">Amount</th><th class="r">Actions</th></tr></thead>
+        <thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Proof &amp; crypto details</th><th class="r">Amount</th><th class="r">Actions</th></tr></thead>
         <tbody>
         <% pending.forEach(function (t) { %>
           <tr>
@@ -32,7 +32,8 @@
               <% if (t.asset) { %><div style="font-family: inherit"><%= t.asset %> · <%= networkName(t.network) %></div><% } %>
               <% if (t.wallet_address) { %><div class="muted"><%= t.type === 'withdrawal' ? 'Pay to: ' : 'Sent to: ' %><%= t.wallet_address %><%= t.wallet_memo ? ' · memo ' + t.wallet_memo : '' %></div><% } %>
               <% if (t.tx_hash) { %><div><a href="<%= txUrl(t.network, t.tx_hash) || '#' %>" target="_blank" rel="noopener noreferrer">Tx <%= shortAddr(t.tx_hash) %> ↗</a></div><% } %>
-              <% if (!t.asset && !t.tx_hash) { %><span class="muted"><%= t.reference || '—' %></span><% } %>
+              <% if (t.has_proof) { %><a class="proof-thumb" href="/proofs/<%= t.id %>" target="_blank" rel="noopener" title="Open screenshot"><img src="/proofs/<%= t.id %>" alt="Deposit screenshot from <%= t.full_name %>" loading="lazy"></a><% } %>
+              <% if (!t.asset && !t.tx_hash && !t.has_proof) { %><span class="muted"><%= t.reference || '—' %></span><% } %>
             </td>
             <td class="r num" style="font-weight: 600"><%= money(t.amount, t.base_currency) %></td>
             <td class="r" style="white-space: nowrap">

@@ -325,3 +325,7 @@ body:has(.chat-widget) .page { padding-bottom: 104px; }
 .threshold { border-left: 4px solid var(--gold); }
 .meter { height: 10px; background: #EEF0F3; border-radius: 5px; overflow: hidden; }
 .meter span { display: block; height: 100%; background: var(--blue-ink); border-radius: 5px; }
+.file-input { padding: 9px 10px; background: #F8F9FB; cursor: pointer; }
+.proof-thumb { display: inline-block; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; line-height: 0; }
+.proof-thumb img { width: 120px; height: 80px; object-fit: cover; object-position: top; }
+.proof-full { max-width: 100%; max-height: 640px; border: 1px solid var(--line); border-radius: 10px; display: block; }

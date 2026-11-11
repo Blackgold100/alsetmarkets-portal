@@ -1,7 +1,7 @@
 <% if (rows.length) { %>
 <div class="table-wrap">
   <table class="data" style="min-width: 640px">
-    <thead><tr><th>Date</th><th>Amount</th><th>Currency</th><th><%= kind === 'deposit' ? 'Sent to' : 'Destination' %></th><th>Blockchain tx</th><th>Status</th></tr></thead>
+    <thead><tr><th>Date</th><th>Amount</th><th>Currency</th><th><%= kind === 'deposit' ? 'Sent to' : 'Destination' %></th><th>Proof</th><th>Status</th></tr></thead>
     <tbody>
     <% rows.forEach(function (t) { %>
       <tr>
@@ -9,7 +9,7 @@
         <td class="num" style="font-weight: 600"><%= money(t.amount, cur) %></td>
         <td><%= t.asset ? t.asset + ' · ' + networkName(t.network) : '—' %></td>
         <td class="num muted" title="<%= t.wallet_address || '' %>"><%= t.wallet_address ? shortAddr(t.wallet_address) : '—' %></td>
-        <td class="num"><% if (t.tx_hash && txUrl(t.network, t.tx_hash)) { %><a href="<%= txUrl(t.network, t.tx_hash) %>" target="_blank" rel="noopener noreferrer"><%= shortAddr(t.tx_hash) %> ↗</a><% } else if (t.tx_hash) { %><%= shortAddr(t.tx_hash) %><% } else { %><span class="muted"><%= t.status === 'pending' ? 'Awaiting' : '—' %></span><% } %></td>
+        <td class="num"><% if (t.has_proof) { %><a href="/proofs/<%= t.id %>" target="_blank" rel="noopener">Screenshot</a><% if (t.tx_hash) { %> · <% } %><% } %><% if (t.tx_hash && txUrl(t.network, t.tx_hash)) { %><a href="<%= txUrl(t.network, t.tx_hash) %>" target="_blank" rel="noopener noreferrer"><%= shortAddr(t.tx_hash) %> ↗</a><% } else if (t.tx_hash) { %><%= shortAddr(t.tx_hash) %><% } else if (!t.has_proof) { %><span class="muted"><%= t.status === 'pending' ? 'Awaiting' : '—' %></span><% } %></td>
         <td><span class="pill pill-<%= t.status %>"><%= titleCase(t.status) %></span></td>
       </tr>
     <% }) %>

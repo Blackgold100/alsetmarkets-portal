@@ -24,7 +24,7 @@ function effect(t) {
 
 async function loadAccount(userId) {
   const [tx, hold, docs, notices] = await Promise.all([
-    query('SELECT * FROM transactions WHERE user_id=$1 ORDER BY tx_date DESC, id DESC', [userId]),
+    query('SELECT t.*, EXISTS (SELECT 1 FROM deposit_proofs p WHERE p.transaction_id=t.id) AS has_proof FROM transactions t WHERE t.user_id=$1 ORDER BY t.tx_date DESC, t.id DESC', [userId]),
     query('SELECT * FROM holdings WHERE user_id=$1 ORDER BY current_value DESC, id', [userId]),
     query('SELECT * FROM documents WHERE user_id=$1 ORDER BY issued_on DESC, id DESC', [userId]),
     query('SELECT * FROM notices WHERE active AND (user_id IS NULL OR user_id=$1) ORDER BY created_at DESC LIMIT 5', [userId]),

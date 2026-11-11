@@ -17,7 +17,7 @@
   <ol class="steps" aria-label="How to deposit">
     <li><span class="step-n">1</span><span><strong>Pick a currency and network</strong>Use the exact network shown.</span></li>
     <li><span class="step-n">2</span><span><strong>Send from your wallet or exchange</strong>Copy the address or scan the QR code.</span></li>
-    <li><span class="step-n">3</span><span><strong>Submit the transaction hash</strong>We credit your account once it's confirmed.</span></li>
+    <li><span class="step-n">3</span><span><strong>Upload a screenshot of the transfer</strong>We credit your account once it's confirmed.</span></li>
   </ol>
 
   <% if (!wallets.length) { %>
@@ -55,15 +55,16 @@
   <div class="row" style="align-items: flex-start">
     <section class="card side" aria-label="Confirm your deposit">
       <h2 style="margin-bottom: 4px">I've sent a deposit</h2>
-      <p class="muted" style="margin: 0 0 14px; font-size: 13px">Submit the details so we can match your payment.</p>
-      <form method="post" action="/funds/deposit" class="stack">
+      <p class="muted" style="margin: 0 0 14px; font-size: 13px">Upload a screenshot of the transfer so we can match your payment.</p>
+      <form method="post" action="/funds/deposit" class="stack" enctype="multipart/form-data">
         <input type="hidden" name="_csrf" value="<%= csrf %>">
         <div class="field"><label for="wallet_id">Sent to</label>
           <select id="wallet_id" name="wallet_id" required>
             <% wallets.forEach(function (w) { %><option value="<%= w.id %>"><%= w.asset %> · <%= networkName(w.network) %></option><% }) %>
           </select></div>
         <div class="field"><label for="amount">Amount sent (<%= cur %> value)</label><input id="amount" name="amount" type="text" inputmode="decimal" required placeholder="e.g. 1,000.00" value="<%= upgrade ? Number(upgrade.amount).toFixed(2) : '' %>"><span class="hint">Minimum <%= money(minDeposit, cur) %>. Stablecoins (USDT/USDC) are credited 1:1.</span></div>
-        <div class="field"><label for="tx_hash">Transaction hash (TxID)</label><input id="tx_hash" name="tx_hash" type="text" required autocomplete="off" spellcheck="false" class="num"><span class="hint">Find it in your wallet or exchange's withdrawal history.</span></div>
+        <div class="field"><label for="screenshot">Screenshot of the transaction</label><input id="screenshot" name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" required class="file-input"><span class="hint">A screenshot from your wallet or exchange showing the completed transfer: amount, coin, network and destination address. PNG, JPG or WEBP, up to 6 MB.</span></div>
+        <div class="field"><label for="tx_hash">Transaction hash (TxID) <span class="muted" style="font-weight: 400">· optional</span></label><input id="tx_hash" name="tx_hash" type="text" autocomplete="off" spellcheck="false" class="num"><span class="hint">If you have it, it helps us confirm your deposit faster.</span></div>
         <% if (upgrade) { %>
         <label class="check" style="font-weight: 400; font-size: 13px; min-height: 0; align-items: flex-start"><input type="checkbox" name="upgrade_request_id" value="<%= upgrade.id %>" checked style="margin-top: 2px"> <span>This deposit is for my upgrade to <%= upgrade.target_tier %></span></label>
         <% } %>

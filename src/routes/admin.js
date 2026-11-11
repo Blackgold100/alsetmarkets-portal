@@ -65,7 +65,7 @@ router.get('/', wrap(async (req, res) => {
             ${BAL_SQL}
      FROM users u LEFT JOIN transactions t ON t.user_id=u.id WHERE u.role='client'`);
   const { rows: pending } = await query(
-    `SELECT t.*, u.full_name, u.account_no, u.base_currency, r.target_tier, r.amount AS upgrade_amount
+    `SELECT t.*, u.full_name, u.account_no, u.base_currency, r.target_tier, r.amount AS upgrade_amount, EXISTS (SELECT 1 FROM deposit_proofs p WHERE p.transaction_id=t.id) AS has_proof
      FROM transactions t JOIN users u ON u.id=t.user_id LEFT JOIN upgrade_requests r ON r.id=t.upgrade_request_id
      WHERE t.status='pending' ORDER BY t.tx_date, t.id LIMIT 20`);
   const { rows: pendingWallets } = await query(
@@ -232,7 +232,7 @@ router.post('/clients/:id/transactions', wrap(async (req, res) => {
 async function getTx(id) {
   const n = Number(id);
   if (!Number.isInteger(n)) return null;
-  const { rows } = await query('SELECT t.*, u.full_name, u.base_currency FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.id=$1', [n]);
+  const { rows } = await query('SELECT t.*, u.full_name, u.base_currency, EXISTS (SELECT 1 FROM deposit_proofs p WHERE p.transaction_id=t.id) AS has_proof FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.id=$1', [n]);
   return rows[0] || null;
 }
 

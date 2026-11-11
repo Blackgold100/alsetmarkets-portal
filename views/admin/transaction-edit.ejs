@@ -5,6 +5,13 @@
     <p style="margin: 0 0 4px"><a href="/admin/clients/<%= t.user_id %>#transactions" style="text-decoration: none">← <%= t.full_name %></a></p>
     <h1>Edit transaction</h1>
   </div></div>
+  <% if (t.has_proof) { %>
+  <section class="card">
+    <div class="card-head"><h2>Client's screenshot</h2><a href="/proofs/<%= t.id %>" target="_blank" rel="noopener">Open full size ↗</a></div>
+    <a href="/proofs/<%= t.id %>" target="_blank" rel="noopener"><img class="proof-full" src="/proofs/<%= t.id %>" alt="Deposit screenshot submitted by <%= t.full_name %>"></a>
+    <p class="muted" style="margin: 10px 0 0; font-size: 13px">Check the amount, coin, network and destination address against your wallet before approving. Screenshots can be edited, so confirm the payment actually arrived.</p>
+  </section>
+  <% } %>
   <form method="post" action="/admin/transactions/<%= t.id %>" class="card">
     <input type="hidden" name="_csrf" value="<%= csrf %>">
     <div class="form-grid">

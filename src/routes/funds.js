@@ -9,6 +9,27 @@ const { summarize } = require('../metrics');
 const { inPlansValue } = require('../plans');
 const U = require('../upgrades');
 
+const crypto = require('crypto');
+const multer = require('multer');
+
+const MAX_PROOF_MB = 6;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_PROOF_MB * 1024 * 1024, files: 1, fields: 20 } });
+// Identify the image by its first bytes, not by the name or type the browser claims
+function imageType(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+function proofUpload(req, res, next) {
+  upload.single('screenshot')(req, res, (err) => {
+    if (!err) return next();
+    h.flash(req, 'error', err.code === 'LIMIT_FILE_SIZE' ? `The screenshot must be smaller than ${MAX_PROOF_MB} MB.` : 'The screenshot could not be uploaded. Please try again.');
+    res.redirect('/funds/deposit');
+  });
+}
+
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
@@ -52,36 +73,61 @@ async function balances(userId) {
 router.get('/deposit', wrap(async (req, res) => {
   const wallets = await depositWallets(req.user.id);
   const { rows: recent } = await query(
-    "SELECT * FROM transactions WHERE user_id=$1 AND type='deposit' ORDER BY created_at DESC LIMIT 10", [req.user.id]);
+    "SELECT t.*, EXISTS (SELECT 1 FROM deposit_proofs p WHERE p.transaction_id=t.id) AS has_proof FROM transactions t WHERE t.user_id=$1 AND t.type='deposit' ORDER BY t.created_at DESC LIMIT 10", [req.user.id]);
   // Coming from the upgrade page: show the upgrade and pre-fill its amount
   const open = await U.openRequest(req.user.id);
   const upgrade = open && open.status === 'awaiting_deposit' ? open : null;
   res.render('client/deposit', { title: 'Add funds', wallets, recent, minDeposit: MIN_DEPOSIT, form: {}, upgrade });
 }));
 
-router.post('/deposit', limiter, wrap(async (req, res) => {
+router.post('/deposit', limiter, proofUpload, h.checkCsrf, wrap(async (req, res) => {
   const u = req.user;
   const back = '/funds/deposit';
   if (u.status === 'suspended' || u.status === 'closed') { h.flash(req, 'error', 'Deposits are unavailable while your account is ' + u.status + '.'); return res.redirect(back); }
   const wallets = await depositWallets(u.id);
   const w = wallets.find((x) => String(x.id) === String(req.body.wallet_id));
   const amount = h.amount(req.body.amount);
-  const hash = h.str(req.body.tx_hash, 120);
+  const hash = h.optStr(req.body.tx_hash, 120);
+  const file = req.file;
+  const mime = file ? imageType(file.buffer) : null;
   if (!w) { h.flash(req, 'error', 'Choose the wallet you sent funds to.'); return res.redirect(back); }
   if (!amount || amount < MIN_DEPOSIT) { h.flash(req, 'error', `Enter the amount sent (minimum ${h.money(MIN_DEPOSIT, u.base_currency)}).`); return res.redirect(back); }
-  if (!cx.validHash(w.network, hash)) { h.flash(req, 'error', `That doesn't look like a valid ${cx.networkName(w.network)} transaction hash. Copy it from your wallet or exchange's transaction details.`); return res.redirect(back); }
-  const { rows: dupe } = await query('SELECT 1 FROM transactions WHERE lower(tx_hash)=lower($1)', [hash]);
-  if (dupe.length) { h.flash(req, 'error', 'This transaction hash has already been submitted.'); return res.redirect(back); }
+  if (!file) { h.flash(req, 'error', 'Attach a screenshot of the completed transaction from your wallet or exchange.'); return res.redirect(back); }
+  if (!mime) { h.flash(req, 'error', 'The screenshot must be a PNG, JPG or WEBP image.'); return res.redirect(back); }
+  const sha = crypto.createHash('sha256').update(file.buffer).digest('hex');
+  const { rows: sameProof } = await query('SELECT 1 FROM deposit_proofs WHERE sha256=$1', [sha]);
+  if (sameProof.length) { h.flash(req, 'error', 'This screenshot has already been submitted for another deposit.'); return res.redirect(back); }
+  if (hash) {
+    if (!cx.validHash(w.network, hash)) { h.flash(req, 'error', `That doesn't look like a valid ${cx.networkName(w.network)} transaction hash. Check it, or leave the field empty.`); return res.redirect(back); }
+    const { rows: dupe } = await query('SELECT 1 FROM transactions WHERE lower(tx_hash)=lower($1)', [hash]);
+    if (dupe.length) { h.flash(req, 'error', 'This transaction hash has already been submitted.'); return res.redirect(back); }
+  }
 
   // Linked to an upgrade if the client ticked the box on the deposit form
   const open = req.body.upgrade_request_id ? await U.openRequest(u.id) : null;
   const upg = open && open.status === 'awaiting_deposit' && String(open.id) === String(req.body.upgrade_request_id) ? open : null;
-  const { rows: [t] } = await query(
+  // Transaction, screenshot and upgrade link are saved together or not at all
+  const db = await pool.connect();
+  let t;
+  try {
+    await db.query('BEGIN');
+    ({ rows: [t] } = await db.query(
     `INSERT INTO transactions (user_id,type,amount,status,tx_date,description,asset,network,wallet_address,wallet_memo,tx_hash,client_requested,upgrade_request_id)
      VALUES ($1,'deposit',$2,'pending',CURRENT_DATE,$3,$4,$5,$6,$7,$8,TRUE,$9) RETURNING id`,
-    [u.id, amount, `Crypto deposit · ${w.asset} (${cx.networkName(w.network)})${upg ? ` · upgrade to ${upg.target_tier}` : ''}`, w.asset, w.network, w.address, w.memo, hash, upg ? upg.id : null]);
-  if (upg) await query("UPDATE upgrade_requests SET status='deposit_submitted' WHERE id=$1", [upg.id]);
-  await h.audit(req, 'deposit_submitted', u.id, { id: t.id, amount, asset: w.asset, network: w.network, tx_hash: hash, upgrade_request: upg ? upg.id : undefined });
+    [u.id, amount, `Crypto deposit · ${w.asset} (${cx.networkName(w.network)})${upg ? ` · upgrade to ${upg.target_tier}` : ''}`, w.asset, w.network, w.address, w.memo, hash, upg ? upg.id : null]));
+    await db.query(
+    'INSERT INTO deposit_proofs (transaction_id, user_id, mime, size_bytes, sha256, original_name, data) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [t.id, u.id, mime, file.size, sha, h.optStr(file.originalname, 200), file.buffer]);
+    if (upg) await db.query("UPDATE upgrade_requests SET status='deposit_submitted' WHERE id=$1", [upg.id]);
+    await db.query('COMMIT');
+  } catch (e) {
+    await db.query('ROLLBACK').catch(() => {});
+    if (e.code === '23505') { h.flash(req, 'error', 'This screenshot has already been submitted for another deposit.'); return res.redirect(back); }
+    throw e;
+  } finally {
+    db.release();
+  }
+  await h.audit(req, 'deposit_submitted', u.id, { id: t.id, amount, asset: w.asset, network: w.network, tx_hash: hash || undefined, screenshot: sha.slice(0, 12), upgrade_request: upg ? upg.id : undefined });
   h.flash(req, 'success', `Deposit of ${h.money(amount, u.base_currency)} submitted. It will be credited once confirmed on the blockchain and approved by our team${upg ? (amount + 1e-9 >= upg.amount ? `, and your account will then move to ${upg.target_tier}` : `. This is less than the ${h.money(upg.amount, u.base_currency)} needed for ${upg.target_tier}, so our team will contact you`) : ''}.`);
   res.redirect(back);
 }));

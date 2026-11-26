@@ -245,6 +245,7 @@ router.get('/transactions/:tid/edit', wrap(async (req, res) => {
 router.post('/transactions/:tid', wrap(async (req, res) => {
   const old = await getTx(req.params.tid);
   if (!old) return notFound(res);
+  if (old.type === 'withdrawal' || req.body.type === 'withdrawal') { h.flash(req, 'error', 'Withdrawal records must be managed through Withdrawal management so every decision has a client-visible reason.'); return res.redirect('/admin/withdrawals'); }
   const t = readTx(req.body);
   if (!t.type || !t.amount || !t.tx_date) { h.flash(req, 'error', 'Choose a type and enter a valid amount and date.'); return res.redirect(`/admin/transactions/${old.id}/edit`); }
   const we = txWalletError(t);
@@ -263,6 +264,7 @@ router.post('/transactions/:tid', wrap(async (req, res) => {
 router.post('/transactions/:tid/status', wrap(async (req, res) => {
   const old = await getTx(req.params.tid);
   if (!old) return notFound(res);
+  if (old.type === 'withdrawal') { h.flash(req, 'info', 'Use Withdrawal management to record a reason and update this request.'); return res.redirect('/admin/withdrawals'); }
   const status = h.oneOf(req.body.status, TX_STATUS, null);
   const back = req.body.back === 'dashboard' ? '/admin' : `/admin/clients/${old.user_id}#transactions`;
   const hash = h.optStr(req.body.tx_hash, 120);

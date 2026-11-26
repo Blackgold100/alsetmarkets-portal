@@ -1,0 +1,52 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 960px">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Corporate information</div>
+      <h1>Company registration</h1>
+      <p>Legal company details associated with the AlsetMarkets platform.</p>
+    </div>
+    <span class="pill pill-success">Companies House record · Active</span>
+  </div>
+
+  <section class="card" style="margin-bottom:18px; overflow:hidden">
+    <div style="padding:24px; border-bottom:1px solid var(--border, #e5e7eb)">
+      <div class="eyebrow">Registered business name</div>
+      <h2 style="font-size:clamp(22px,3vw,32px); line-height:1.2; margin:8px 0 18px; letter-spacing:.01em">MARKETS DIRECT INVESTMENTS LIMITED</h2>
+      <div style="background:var(--surface-muted, #f5f7fa); border:1px solid var(--border, #e5e7eb); border-radius:12px; padding:16px 18px; display:inline-block; min-width:min(100%, 320px)">
+        <div class="eyebrow">UK Companies House registration number</div>
+        <div style="font-size:clamp(30px,5vw,42px); font-weight:800; letter-spacing:.06em; line-height:1.15; margin-top:6px">16145995</div>
+      </div>
+    </div>
+    <div style="padding:22px 24px">
+      <div class="form-grid">
+        <div><div class="eyebrow">Registering authority</div><strong>Companies House</strong><div class="muted" style="font-size:13px">England and Wales, United Kingdom</div></div>
+        <div><div class="eyebrow">Company type</div><strong>Private company limited by shares</strong></div>
+        <div><div class="eyebrow">Date of incorporation</div><strong>20 December 2024</strong></div>
+        <div><div class="eyebrow">Company status</div><strong>Active</strong><div class="muted" style="font-size:13px">As shown on the Companies House register</div></div>
+        <div style="grid-column:1/-1"><div class="eyebrow">Registered office</div><strong>228 Park View, Whitley Bay, England, NE26 3QR</strong></div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:22px">
+        <a class="btn btn-primary" href="https://find-and-update.company-information.service.gov.uk/company/16145995/filing-history/MzQ0ODM0NTgxN2FkaXF6a2N4/document" target="_blank" rel="noopener noreferrer">View official Certificate of Incorporation</a>
+        <a class="btn btn-outline" href="https://find-and-update.company-information.service.gov.uk/company/16145995" target="_blank" rel="noopener noreferrer">Verify on Companies House</a>
+      </div>
+      <p class="muted" style="font-size:12px; margin:14px 0 0">The links above open records hosted by the UK Companies House. The certificate is the official incorporation document; this page is a summary of the company's registered details.</p>
+    </div>
+  </section>
+
+  <% if (certificate) { %>
+    <section class="card" style="margin-bottom:18px">
+      <div class="card-head"><div><div class="eyebrow">Additional document published by administration</div><h2 style="margin:5px 0"><%= certificate.title %></h2></div><span class="pill pill-success">Published</span></div>
+      <% if (certificate.description) { %><p><%= certificate.description %></p><% } %>
+      <div class="form-actions"><a class="btn btn-outline" href="/certificate/file" target="_blank" rel="noopener">View additional document</a><a class="btn btn-outline" href="/certificate/file?download=1">Download additional document</a></div>
+      <p class="muted" style="font-size:12px;margin-bottom:0">Published <%= fmtDate(certificate.uploaded_at.toISOString()) %></p>
+    </section>
+  <% } %>
+
+  <section class="card" style="border-left:4px solid var(--muted, #64748b)">
+    <h2 style="margin-top:0">Important information</h2>
+    <p style="margin-bottom:8px">Company incorporation confirms the legal registration of the company in the United Kingdom. It does not, by itself, mean that the company or this platform is authorised or regulated to provide investment, brokerage, asset-management or other regulated financial services.</p>
+    <p class="muted" style="font-size:12px; margin-bottom:0">Clients should independently review the official Companies House record and check any applicable financial-services permissions with the relevant regulator.</p>
+  </section>
+</main>
+<%- include('../partials/foot') %>

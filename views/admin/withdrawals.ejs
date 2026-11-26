@@ -1,0 +1,33 @@
+<%- include('../partials/head') %>
+<main class="page">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div><h1>Withdrawal management</h1><p>Review requests, record decisions and share supporting documents with clients.</p></div></div>
+  <% if (!withdrawals.length) { %><section class="card"><div class="empty">No withdrawal requests found.</div></section><% } %>
+  <% withdrawals.forEach(function (t) { %>
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head" style="align-items:flex-start"><div><h2 style="margin:0">Withdrawal #<%= t.id %> · <%= money(t.amount,t.base_currency) %></h2><p class="muted" style="margin:5px 0 0"><a href="/admin/clients/<%= t.user_id %>"><%= t.full_name %></a> · <%= t.account_no %> · <%= fmtDateTime(t.created_at) %></p></div><span class="pill pill-<%= t.status %>"><%= titleCase(t.status) %></span></div>
+      <div class="muted" style="font-size:13px;margin-bottom:12px"><%= t.asset || '' %> <%= t.network ? '· '+networkName(t.network) : '' %> · Destination: <span class="num"><%= t.wallet_address || '—' %></span><% if (t.tx_hash) { %> · Tx: <%= t.tx_hash %><% } %></div>
+      <div class="row" style="align-items:flex-start;gap:20px;flex-wrap:wrap">
+        <form method="post" action="/admin/withdrawals/<%= t.id %>/action" class="stack" style="flex:1;min-width:260px">
+          <input type="hidden" name="_csrf" value="<%= csrf %>">
+          <div class="field"><label>Administrative action</label><select name="status" required><option value="">Choose action</option><% statuses.forEach(function(s){ %><option value="<%= s %>"><%= titleCase(s) %></option><% }) %></select></div>
+          <div class="field"><label>Reason visible to client</label><textarea name="reason" rows="3" minlength="8" maxlength="2000" required placeholder="Explain the decision or current status clearly."></textarea></div>
+          <% if (t.network) { %><div class="field"><label>Payout transaction hash (required to complete)</label><input name="tx_hash" value="<%= t.tx_hash || '' %>" placeholder="Verified payout transaction hash"></div><% } %>
+          <button class="btn btn-primary" type="submit">Save withdrawal update</button>
+        </form>
+        <form method="post" action="/admin/withdrawals/<%= t.id %>/documents" enctype="multipart/form-data" class="stack" style="flex:1;min-width:260px">
+          <input type="hidden" name="_csrf" value="<%= csrf %>">
+          <h3 style="margin:0">Upload supporting document</h3>
+          <div class="field"><label>Document title</label><input name="title" maxlength="160" required placeholder="e.g. Withdrawal review notice"></div>
+          <div class="field"><label>Description</label><input name="description" maxlength="500" placeholder="Optional explanation"></div>
+          <div class="field"><label>PDF or image (max 10 MB)</label><input type="file" name="document" accept="application/pdf,image/png,image/jpeg,image/webp" required></div>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="client_visible" checked> Share with client</label>
+          <button class="btn btn-outline" type="submit">Upload document</button>
+          <span class="muted" style="font-size:12px"><%= t.document_count %> document(s) currently attached.</span>
+        </form>
+      </div>
+      <% if (t.latest_reason) { %><div class="alert" style="margin-top:14px"><strong>Latest client-facing reason:</strong> <%= t.latest_reason %></div><% } %>
+    </section>
+  <% }) %>
+</main>
+<%- include('../partials/foot') %>

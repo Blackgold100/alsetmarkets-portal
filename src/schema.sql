@@ -296,3 +296,41 @@ INSERT INTO plans (slug, name, summary, description, risk_level, min_amount, loc
   'Capital is allocated to real-world assets, mainly residential property let as short-term holiday rentals and tokenised property shares. Weekly results reflect rental income, occupancy, nightly rates, management and maintenance costs, and changes in property valuations, and can be negative. Property is less liquid than listed markets, which is why this plan has a longer lock-in.',
   'Medium', 1000, 180, 4, 'Alpha')
 ON CONFLICT (slug) DO NOTHING;
+
+
+-- Withdrawal tracking: client-visible status history and private supporting files.
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_status_check CHECK (status IN ('pending','approved','processing','halted','suspended','completed','rejected','cancelled'));
+CREATE TABLE IF NOT EXISTS withdrawal_events (
+ id SERIAL PRIMARY KEY, transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+ actor_role TEXT NOT NULL CHECK (actor_role IN ('admin','client','system')), from_status TEXT, to_status TEXT NOT NULL,
+ reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS withdrawal_events_tx ON withdrawal_events(transaction_id, created_at, id);
+CREATE TABLE IF NOT EXISTS withdrawal_documents (
+ id SERIAL PRIMARY KEY, transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+ title TEXT NOT NULL, description TEXT, mime TEXT NOT NULL, size_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL,
+ original_name TEXT NOT NULL, data BYTEA NOT NULL, client_visible BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS withdrawal_documents_tx ON withdrawal_documents(transaction_id, created_at DESC);
+
+-- ---------- Platform registration certificate ----------
+-- Stores the current client-visible certificate and retains prior versions for audit.
+CREATE TABLE IF NOT EXISTS platform_certificates (
+  id                  SERIAL PRIMARY KEY,
+  title               TEXT NOT NULL,
+  registration_body   TEXT,
+  registration_number TEXT,
+  issued_on           DATE,
+  description         TEXT,
+  mime                TEXT NOT NULL CHECK (mime IN ('application/pdf','image/png','image/jpeg','image/webp')),
+  size_bytes          INTEGER NOT NULL CHECK (size_bytes > 0),
+  original_name       TEXT NOT NULL,
+  data                BYTEA NOT NULL,
+  uploaded_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  is_current          BOOLEAN NOT NULL DEFAULT TRUE,
+  client_visible      BOOLEAN NOT NULL DEFAULT TRUE,
+  uploaded_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS platform_certificates_current ON platform_certificates(is_current, client_visible, uploaded_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS platform_certificates_one_current ON platform_certificates(is_current) WHERE is_current=TRUE;

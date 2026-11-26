@@ -123,3 +123,17 @@ npm start              # http://localhost:3000
 - Logo: replace `public/logo.svg`.
 - Colours: edit the variables at the top of `public/styles.css`.
 - Wording: edit the `.ejs` files in `views/`.
+
+## Withdrawal tracking and document management
+
+The admin console now includes **Admin → Withdrawals**. Administrators can update each withdrawal to Approved, Processing, Halted, Suspended, Rejected, Completed or Cancelled. Every status change requires a client-visible explanation and is recorded in the withdrawal history and the general audit log. A crypto withdrawal cannot be marked Completed without a valid payout transaction hash (or an existing recorded hash).
+
+Administrators can attach PDF, PNG, JPG or WEBP supporting documents (up to 10 MB) to a specific withdrawal and choose whether each document is visible to the client. Client-visible updates and documents appear under **Withdraw → Withdrawal tracking & updates**. Documents are stored in PostgreSQL and served only to the owning client while signed in, or to an authorized administrator through the admin workflow.
+
+Pending, approved, processing, halted and suspended withdrawal amounts remain reserved from the client's available-to-withdraw balance. Rejected and cancelled requests release the reservation; completed withdrawals are reflected in the completed transaction balance.
+
+## Platform registration certificate
+
+The admin console includes **Admin → Certificate**. An administrator can publish the platform's registration certificate as a PDF, PNG, JPG or WEBP file (up to 10 MB), and must enter the registering authority and official registration number. Publishing a replacement makes it the current client-facing version while retaining prior versions in the admin history. The current certificate can be hidden or shown without deleting it.
+
+Signed-in clients can open **Company registration** from the client navigation to view the published registration details and open or download the certificate. The document endpoint requires authentication and only serves the current version when it is marked client-visible. Uploads are validated by file signature, stored in PostgreSQL and logged in the audit log. Only upload a genuine, current certificate issued by the stated authority; this feature displays the document but does not independently verify its authenticity or confer regulatory authorization.

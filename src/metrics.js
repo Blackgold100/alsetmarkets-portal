@@ -43,7 +43,7 @@ function summarize(transactions, inPlans = 0) {
   const invested = deposits - withdrawals;
   const roi = profit - loss - fees;
   const balance = invested + roi;
-  const pendingWithdrawals = transactions.filter((t) => t.status === 'pending' && t.type === 'withdrawal').reduce((a, t) => a + t.amount, 0);
+  const pendingWithdrawals = transactions.filter((t) => ['pending','approved','processing','halted','suspended'].includes(t.status) && t.type === 'withdrawal').reduce((a, t) => a + t.amount, 0);
   const pendingDeposits = transactions.filter((t) => t.status === 'pending' && t.type === 'deposit').reduce((a, t) => a + t.amount, 0);
   const available = Math.max(0, Math.round((balance - pendingWithdrawals - inPlans) * 100) / 100);
 

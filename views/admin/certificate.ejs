@@ -1,0 +1,42 @@
+<%- include('../partials/head') %>
+<main class="page" style="max-width: 1000px">
+  <%- include('../partials/flash') %>
+  <div class="page-head"><div><h1>Platform registration certificate</h1><p>Manage additional corporate documents. The UK company registration details and official Companies House certificate are already displayed in the client portal.</p></div></div>
+  <section class="card" style="margin-bottom: 18px">
+    <div class="eyebrow">Registered business</div><h2 style="margin:6px 0">MARKETS DIRECT INVESTMENTS LIMITED</h2><p class="muted">Companies House number: <strong>16145995</strong> · Incorporated 20 December 2024 · Active according to the register.</p><p><a href="https://find-and-update.company-information.service.gov.uk/company/16145995" target="_blank" rel="noopener noreferrer">Open official Companies House record</a> · <a href="https://find-and-update.company-information.service.gov.uk/company/16145995/filing-history/MzQ0ODM0NTgxN2FkaXF6a2N4/document" target="_blank" rel="noopener noreferrer">View Certificate of Incorporation</a></p>
+    <h2 style="margin-bottom: 8px">Upload or replace certificate</h2>
+    <p class="muted" style="margin-top:0">Uploading a new certificate makes it the current client-visible version. Previous versions remain in the administrative history.</p>
+    <form method="post" action="/admin/certificate/upload" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="form-grid">
+        <div class="field"><label for="title">Certificate title</label><input id="title" name="title" required maxlength="160" value="Certificate of Incorporation"></div>
+        <div class="field"><label for="registration_body">Registering authority</label><input id="registration_body" name="registration_body" required maxlength="160" value="Companies House, England and Wales, United Kingdom"></div>
+        <div class="field"><label for="registration_number">Registration number</label><input id="registration_number" name="registration_number" required maxlength="100" value="16145995"></div>
+        <div class="field"><label for="issued_on">Date issued (if shown)</label><input id="issued_on" name="issued_on" type="date"></div>
+      </div>
+      <div class="field" style="margin-top:14px"><label for="description">Client-facing note (optional)</label><textarea id="description" name="description" maxlength="1000" placeholder="Briefly describe what this document certifies."></textarea></div>
+      <div class="field" style="margin-top:14px"><label for="certificate">Certificate file (PDF, PNG, JPG or WEBP; maximum 10 MB)</label><input id="certificate" name="certificate" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" required></div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Publish certificate to clients</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-bottom:12px">Certificate history</h2>
+    <% if (certificates.length) { %>
+      <div class="table-wrap"><table class="data" style="min-width:760px"><thead><tr><th>Uploaded</th><th>Certificate</th><th>Registration details</th><th>Visibility</th><th class="r">Actions</th></tr></thead><tbody>
+      <% certificates.forEach(function (c) { %>
+        <tr>
+          <td class="muted"><%= fmtDate(c.uploaded_at.toISOString()) %></td>
+          <td><strong><%= c.title %></strong><div class="muted" style="font-size:12px"><%= c.original_name %></div><% if (c.is_current) { %><span class="pill pill-success">Current version</span><% } %></td>
+          <td><%= c.registration_body %><div class="muted" style="font-size:12px">No. <%= c.registration_number %></div></td>
+          <td><span class="pill <%= c.client_visible && c.is_current ? 'pill-success' : 'pill-neutral' %>"><%= c.client_visible && c.is_current ? 'Visible to clients' : 'Not visible' %></span></td>
+          <td class="r" style="white-space:nowrap"><a class="btn btn-outline btn-sm" href="/admin/certificate/<%= c.id %>/file" target="_blank" rel="noopener">View</a>
+            <% if (c.is_current) { %><form method="post" action="/admin/certificate/<%= c.id %>/visibility" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline btn-sm" type="submit"><%= c.client_visible ? 'Hide' : 'Show' %></button></form><% } %>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody></table></div>
+    <% } else { %><div class="empty">No registration certificate has been uploaded yet.</div><% } %>
+  </section>
+</main>
+<%- include('../partials/foot') %>

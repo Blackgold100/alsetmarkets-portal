@@ -44,6 +44,27 @@
     </section>
   </div>
 
+  <section class="card" aria-label="Withdrawal tracking history">
+    <div class="card-head"><h2>Withdrawal tracking &amp; updates</h2><span class="muted" style="font-size:13px">Administrative decisions and explanations</span></div>
+    <% if (withdrawalEvents.length) { %>
+      <% withdrawalEvents.forEach(function (e) { %>
+        <div style="padding:12px 0;border-bottom:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong><%= titleCase(e.to_status) %></strong><span class="muted" style="font-size:12px"><%= fmtDateTime(e.created_at) %></span></div>
+          <p style="margin:6px 0 0"><%= e.reason %></p><div class="muted" style="font-size:12px;margin-top:4px">Withdrawal #<%= e.transaction_id %></div>
+        </div>
+      <% }) %>
+    <% } else { %><div class="empty">Updates will appear here when your withdrawal request is reviewed.</div><% } %>
+    <h3 style="margin:18px 0 8px">Supporting documents</h3>
+    <% if (withdrawalDocuments.length) { %>
+      <% withdrawalDocuments.forEach(function (d) { %>
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)">
+          <div><strong><%= d.title %></strong><div class="muted" style="font-size:12px"><%= d.description || 'Supporting document' %> · <%= fmtDate(d.created_at) %> · Withdrawal #<%= d.transaction_id %></div></div>
+          <a class="btn btn-outline btn-sm" href="/funds/withdrawal-documents/<%= d.id %>" target="_blank" rel="noopener">View document</a>
+        </div>
+      <% }) %>
+    <% } else { %><div class="muted" style="font-size:13px">No supporting documents have been shared with you.</div><% } %>
+  </section>
+
   <section class="card" id="wallets" aria-label="Withdrawal wallets">
     <div class="card-head"><h2>Your withdrawal wallets</h2><span class="muted" style="font-size: 13px">New wallets are verified by our team before first use. This protects you if your login is ever compromised.</span></div>
     <% if (wallets.length) { %>

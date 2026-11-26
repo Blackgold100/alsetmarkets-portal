@@ -140,10 +140,22 @@ router.get('/withdraw', wrap(async (req, res) => {
     balances(u.id),
     query("SELECT * FROM transactions WHERE user_id=$1 AND type='withdrawal' ORDER BY created_at DESC LIMIT 10", [u.id]),
   ]);
+  const [{ rows: events }, { rows: documents }] = await Promise.all([
+    query('SELECT * FROM withdrawal_events WHERE user_id=$1 ORDER BY created_at DESC', [u.id]),
+    query('SELECT * FROM withdrawal_documents WHERE user_id=$1 AND client_visible=TRUE ORDER BY created_at DESC', [u.id]),
+  ]);
   const blockers = [];
   if (u.status !== 'active') blockers.push(`Your account is ${u.status}. Withdrawals are available on active accounts only.`);
   if (REQUIRE_KYC && u.kyc_status !== 'verified') blockers.push('Identity verification (KYC) must be completed before you can withdraw.');
-  res.render('client/withdraw', { title: 'Withdraw', wallets, summary: s, recent, blockers, minWithdrawal: MIN_WITHDRAWAL });
+  res.render('client/withdraw', { title: 'Withdraw', wallets, summary: s, recent, blockers, minWithdrawal: MIN_WITHDRAWAL, withdrawalEvents: events, withdrawalDocuments: documents });
+}));
+
+router.get('/withdrawal-documents/:id', wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const { rows } = await query('SELECT * FROM withdrawal_documents WHERE id=$1 AND user_id=$2 AND client_visible=TRUE', [id, req.user.id]);
+  const d = rows[0]; if (!d) return res.status(404).send('Document not found.');
+  res.set({ 'Content-Type': d.mime, 'Content-Length': String(d.size_bytes), 'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
+  res.send(d.data);
 }));
 
 router.post('/wallets', limiter, wrap(async (req, res) => {
@@ -212,6 +224,7 @@ router.post('/withdraw', limiter, wrap(async (req, res) => {
       `INSERT INTO transactions (user_id,type,amount,status,tx_date,description,asset,network,wallet_address,wallet_memo,client_requested)
        VALUES ($1,'withdrawal',$2,'pending',CURRENT_DATE,$3,$4,$5,$6,$7,TRUE) RETURNING id`,
       [u.id, amount, `Withdrawal to ${w.asset} (${cx.networkName(w.network)}) ${cx.shortAddr(w.address)}`, w.asset, w.network, w.address, w.memo]);
+    await client.query(`INSERT INTO withdrawal_events (transaction_id,user_id,actor_id,actor_role,from_status,to_status,reason) VALUES ($1,$2,$3,'client',NULL,'pending',$4)`, [t.id, u.id, u.id, 'Withdrawal request submitted and is awaiting administrative review.']);
     await client.query('COMMIT');
     await h.audit(req, 'withdrawal_requested', u.id, { id: t.id, amount, asset: w.asset, network: w.network, address: w.address });
   } catch (e) {

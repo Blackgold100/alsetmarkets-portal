@@ -103,6 +103,10 @@ app.use((req, res, next) => {
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
 app.use(require('./src/routes/auth'));
 app.use('/admin', require('./src/routes/admin'));
+app.use('/admin/withdrawals', require('./src/routes/withdrawals'));
+const certificateRoutes = require('./src/routes/certificate');
+app.use('/admin/certificate', certificateRoutes.admin);
+app.use(certificateRoutes.client);
 app.use('/admin', require('./src/routes/plans').admin);
 app.use('/plans', require('./src/routes/plans').client);
 app.use('/upgrade', require('./src/routes/upgrade'));

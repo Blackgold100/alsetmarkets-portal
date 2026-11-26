@@ -44,12 +44,13 @@ function csrfFail(res) {
 // File-upload forms are read by multer inside the route, so their token is checked
 // there with checkCsrf(). Only the routes listed here may receive uploads.
 const MULTIPART_ROUTES = ['/funds/deposit'];
+function multipartAllowed(path) { return MULTIPART_ROUTES.includes(path) || /^\/admin\/withdrawals\/\d+\/documents$/.test(path) || path === '/admin/certificate/upload'; }
 function csrf(req, res, next) {
   if (!req.session.csrf) req.session.csrf = crypto.randomBytes(24).toString('hex');
   res.locals.csrf = req.session.csrf;
   if (req.method === 'POST') {
     if (req.is('multipart/form-data')) {
-      if (!MULTIPART_ROUTES.includes(req.path)) return csrfFail(res);
+      if (!multipartAllowed(req.path)) return csrfFail(res);
       return next(); // verified by checkCsrf after the upload is parsed
     }
     if (!tokenOk(req, (req.body && req.body._csrf) || req.get('x-csrf-token'))) return csrfFail(res);
